@@ -14,6 +14,7 @@ import {
   Typography,
 } from '@mui/material';
 import { searchYouTube, type YouTubeSearchResult } from '../youtube/youtubeSearch';
+import { extractPlaylistId, fetchYoutubePlaylist } from '../youtube/youtubePlaylist';
 
 function TrackRow(props: {
   title: string;
@@ -54,7 +55,9 @@ export function LibraryPanel(props: {
 
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('mixflowdj_yt_api_key') ?? '');
   const [query, setQuery] = useState('');
+  const [playlistInput, setPlaylistInput] = useState('');
   const [results, setResults] = useState<YouTubeSearchResult[]>([]);
+  const [resultsLabel, setResultsLabel] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
@@ -79,6 +82,30 @@ export function LibraryPanel(props: {
     try {
       const items = await searchYouTube(apiKey.trim(), query.trim());
       setResults(items);
+      setResultsLabel(`Risultati per "${query.trim()}"`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadPlaylist() {
+    setError(undefined);
+    if (!apiKey.trim()) {
+      setError('Inserisci prima la tua API key di YouTube Data API v3.');
+      return;
+    }
+    const playlistId = extractPlaylistId(playlistInput);
+    if (!playlistId) {
+      setError('Incolla un link playlist valido (es. youtube.com/playlist?list=...) o un ID playlist.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const items = await fetchYoutubePlaylist(apiKey.trim(), playlistId);
+      setResults(items);
+      setResultsLabel(`Playlist: ${items.length} brani`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -95,10 +122,25 @@ export function LibraryPanel(props: {
 
       {tab === 'local' && (
         <Box>
-          <Button component="label" variant="outlined" size="small" sx={{ mb: 1.5 }}>
-            Scegli file audio
-            <input hidden type="file" accept="audio/*" multiple onChange={(e) => handleFiles(e.target.files)} />
-          </Button>
+          <Box display="flex" gap={1} mb={1.5}>
+            <Button component="label" variant="outlined" size="small">
+              Scegli file audio
+              <input hidden type="file" accept="audio/*" multiple onChange={(e) => handleFiles(e.target.files)} />
+            </Button>
+            <Button component="label" variant="outlined" size="small">
+              Carica cartella (playlist)
+              {/* webkitdirectory: attributo non standard ma supportato dai browser desktop, permette di importare un'intera cartella come playlist */}
+              <input
+                hidden
+                type="file"
+                accept="audio/*"
+                multiple
+                // @ts-expect-error attributo non tipizzato in TS ma supportato dai browser
+                webkitdirectory=""
+                onChange={(e) => handleFiles(e.target.files)}
+              />
+            </Button>
+          </Box>
           <List dense disablePadding>
             {localFiles.map((file, i) => (
               <TrackRow key={`${file.name}-${i}`} title={file.name} onDeck1={() => onLoadLocal(1, file)} onDeck2={() => onLoadLocal(2, file)} />
@@ -106,7 +148,7 @@ export function LibraryPanel(props: {
           </List>
           {localFiles.length === 0 && (
             <Typography variant="body2" sx={{ opacity: 0.5 }}>
-              Nessun file caricato. Scegli uno o più brani dal tuo computer.
+              Nessun file caricato. Scegli uno o più brani, oppure un'intera cartella da usare come playlist.
             </Typography>
           )}
         </Box>
@@ -124,7 +166,8 @@ export function LibraryPanel(props: {
             helperText="Salvata solo nel tuo browser. Serve una tua chiave da Google Cloud Console (API 'YouTube Data API v3')."
             sx={{ mb: 1.5 }}
           />
-          <Box display="flex" gap={1} mb={1.5}>
+
+          <Box display="flex" gap={1} mb={1}>
             <TextField
               size="small"
               fullWidth
@@ -138,9 +181,29 @@ export function LibraryPanel(props: {
             </Button>
           </Box>
 
+          <Box display="flex" gap={1} mb={1.5}>
+            <TextField
+              size="small"
+              fullWidth
+              placeholder="Oppure incolla un link/ID di una playlist YouTube…"
+              value={playlistInput}
+              onChange={(e) => setPlaylistInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && loadPlaylist()}
+            />
+            <Button variant="outlined" onClick={loadPlaylist} disabled={loading} sx={{ minWidth: 88 }}>
+              {loading ? <CircularProgress size={18} /> : 'Playlist'}
+            </Button>
+          </Box>
+
           {error && (
             <Typography variant="body2" color="error" sx={{ mb: 1 }}>
               {error}
+            </Typography>
+          )}
+
+          {resultsLabel && !error && (
+            <Typography variant="caption" sx={{ opacity: 0.6, display: 'block', mb: 0.5 }}>
+              {resultsLabel}
             </Typography>
           )}
 
@@ -159,7 +222,7 @@ export function LibraryPanel(props: {
 
           {results.length === 0 && !loading && !error && (
             <Typography variant="body2" sx={{ opacity: 0.5 }}>
-              I risultati della ricerca appariranno qui.
+              I risultati della ricerca o della playlist appariranno qui.
             </Typography>
           )}
         </Box>

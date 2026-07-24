@@ -95,7 +95,76 @@ Il volume/EQ/tempo/crossfader del mixer sono già collegati ai deck tramite
 `useAudioEngine` (vedi `src/audio/useAudioEngine.ts`): non serve altro
 codice per farli funzionare, sia con file locali che con YouTube.
 
+## Playlist
 
+- **Locali**: nel tab "File locali" puoi scegliere singoli file oppure un'intera
+  **cartella** (pulsante "Carica cartella (playlist)") da usare come playlist.
+- **YouTube**: nel tab "YouTube", oltre alla ricerca, c'è un campo per incollare
+  un **link o ID di playlist** (es. `youtube.com/playlist?list=PL...`): carica
+  tutti i video della playlist nella stessa lista, pronti da mandare su D1/D2.
+
+## Automix
+
+Il pulsante **AUTOMIX** in Master attiva/disattiva il mix automatico:
+
+- quando il brano che sta suonando è vicino alla fine (ultimi ~16 secondi di
+  default), se l'altro deck ha una traccia caricata e ferma, parte da solo e
+  il crossfader si sposta gradualmente verso di lui in ~12 secondi;
+- se il **BPM** di entrambe le tracce è noto (solo per file locali, vedi
+  sotto), il brano in entrata viene sincronizzato di tono/velocità sul BPM di
+  quello in uscita (beatmatching automatico), regolando il playback rate.
+- I tempi (secondi prima della fine, durata del mix) sono costanti in
+  `src/audio/useAutoMix.ts` (`TRIGGER_SECONDS_BEFORE_END`, `TRANSITION_SECONDS`):
+  modificali lì se vuoi transizioni più lunghe/brevi.
+
+**Stima del BPM**: `src/audio/bpmDetect.ts` analizza offline il file audio
+locale (isola le basse frequenze, cerca i picchi di energia con soglia
+adattiva) e stima il BPM. È una stima euristica pensata per musica a beat
+regolare, non un vero beat-tracking: su alcuni brani può risultare impreciso o
+non disponibile (mostrato come "-- BPM"). Per YouTube il BPM non è calcolabile
+(nessun accesso all'audio grezzo), quindi l'automix farà comunque il crossfade
+ma senza beatmatching del pitch tra una traccia locale e una YouTube (o tra
+due YouTube).
+
+## Display "dot matrix"
+
+I valori numerici (tempo trascorso/durata, BPM, percentuali di volume/tempo/
+crossfader/filtri) sono renderizzati con `src/components/DotDisplay.tsx`: uno
+sfondo puntinato scuro + testo monospace con un lieve bagliore, in stile
+vecchio display LED dei mixer/lettori CD. Per applicarlo altrove basta
+avvolgere un valore in `<DotDisplay color={...}>...</DotDisplay>`.
+
+## Layout fedele all'hardware e responsive
+
+L'interfaccia ora rispecchia i controlli reali del DDJ-200:
+
+- **Filtro/CFX** per deck (knob dedicato, sopra l'EQ): sweep low-pass/high-pass
+  vero sui file locali (al centro è trasparente, a sinistra taglia gli alti
+  progressivamente, a destra taglia i bassi). Su YouTube è solo visuale, stesso
+  limite dell'EQ.
+- **Play/Cue** come pulsanti rotondi (icona play/pausa), **Beat Sync** e
+  **Tempo Range** come pulsanti tondi sotto il jog (Tempo Range è solo
+  visuale: non c'è ancora un range del fader tempo selezionabile).
+  Il pulsante headphone-cue resta visuale: il browser non permette di
+  instradare l'audio su un'uscita cuffie separata senza API/hardware dedicati
+  (stesso discorso per **MASTER CUE** in Master).
+- **Tempo** come fader verticale con lettura ±% in stile dot-display, come sul
+  mixer reale (prima era un semplice slider orizzontale).
+- **Performance Pads** etichettati esplicitamente, 2x4 come sull'hardware.
+- **Crossfader** con tacche 0-10 come sul mixer reale.
+- **TRANSITION FX**: sul controller reale applica un effetto automatico
+  durante il passaggio tra i deck. Qui il pulsante "ON/OFF" riusa la stessa
+  idea per attivare/disattivare l'**Automix** (vedi sopra): è una scelta di
+  design, non una riproduzione 1:1 della funzione hardware (che richiederebbe
+  effetti audio dedicati non ancora implementati).
+
+Il layout è **responsive**: su schermi larghi i due deck affiancano il mixer
+al centro (come la console fisica); su mobile/tablet tutto si impila in
+verticale (Deck 1, Mixer, Deck 2) a piena larghezza, pensato per essere usato
+anche da telefono.
+
+
+## Mappa MIDI (riassunto)
 
 | Controllo | Canale/Status | Note/CC |
 |---|---|---|

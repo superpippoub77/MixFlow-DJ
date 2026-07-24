@@ -28,6 +28,7 @@ export class Deck {
   private lowFilter: BiquadFilterNode;
   private midFilter: BiquadFilterNode;
   private highFilter: BiquadFilterNode;
+  private cfxFilter: BiquadFilterNode;
   private volumeGain: GainNode;
 
   // --- YouTube ---
@@ -60,11 +61,15 @@ export class Deck {
     this.highFilter.type = 'highshelf';
     this.highFilter.frequency.value = 5000;
 
+    this.cfxFilter = ctx.createBiquadFilter();
+    this.cfxFilter.type = 'allpass'; // stato neutro/bypass, sovrascritto da setFilter()
+
     this.volumeGain = ctx.createGain();
 
     this.lowFilter.connect(this.midFilter);
     this.midFilter.connect(this.highFilter);
-    this.highFilter.connect(this.volumeGain);
+    this.highFilter.connect(this.cfxFilter);
+    this.cfxFilter.connect(this.volumeGain);
     this.volumeGain.connect(destination);
   }
 
@@ -207,8 +212,40 @@ export class Deck {
     node.gain.setTargetAtTime(db, this.ctx.currentTime, 0.01);
   }
 
+  /**
+   * Knob CFX/filtro: al centro (0.5) è trasparente, verso sinistra applica un
+   * low-pass con frequenza di taglio decrescente, verso destra un high-pass
+   * con frequenza di taglio crescente — come il knob "Filter" reale del DDJ-200.
+   */
+  setFilter(value: number) {
+    const centered = value - 0.5; // -0.5..0.5
+    const now = this.ctx.currentTime;
+    if (Math.abs(centered) < 0.02) {
+      this.cfxFilter.type = 'allpass';
+      return;
+    }
+    if (centered < 0) {
+      const t = -centered * 2; // 0..1
+      const freq = 18000 * Math.pow(300 / 18000, t);
+      this.cfxFilter.type = 'lowpass';
+      this.cfxFilter.Q.setTargetAtTime(1, now, 0.01);
+      this.cfxFilter.frequency.setTargetAtTime(freq, now, 0.01);
+    } else {
+      const t = centered * 2; // 0..1
+      const freq = 60 * Math.pow(4000 / 60, t);
+      this.cfxFilter.type = 'highpass';
+      this.cfxFilter.Q.setTargetAtTime(1, now, 0.01);
+      this.cfxFilter.frequency.setTargetAtTime(freq, now, 0.01);
+    }
+  }
+
   setTempo(value: number) {
     const rate = 1 + (value - 0.5) * 2 * TEMPO_RANGE;
+    this.setPlaybackRateAbsolute(rate);
+  }
+
+  /** Imposta direttamente il rapporto di velocità (usato dall'automix per il beatmatching), bypassando il range ±8% del fader tempo */
+  setPlaybackRateAbsolute(rate: number) {
     if (this.sourceType === 'local' && this.audioEl) {
       this.audioEl.playbackRate = rate;
     } else if (this.sourceType === 'youtube' && this.ytReady) {

@@ -36,6 +36,14 @@ export function useAudioEngine(onEvent: (cb: (e: DDJ200Event) => void) => () => 
         engine.setCrossfader(event.value);
         return;
       }
+      if (event.kind === 'knob' && event.deck === 'master' && event.control === 'filter_deck1') {
+        engine.decks[1].setFilter(event.value);
+        return;
+      }
+      if (event.kind === 'knob' && event.deck === 'master' && event.control === 'filter_deck2') {
+        engine.decks[2].setFilter(event.value);
+        return;
+      }
       if (event.deck === 'master') return;
 
       const deck = event.deck as 1 | 2;
