@@ -66,7 +66,36 @@ useEffect(() => {
   app (Rekordbox, Serato, WeDJ...) stia gia tenendo aperta la porta MIDI in
   esclusiva.
 
-## Mappa MIDI (riassunto)
+## Riproduzione audio (file locali + YouTube)
+
+L'app ora include anche un motore audio vero (`src/audio/`) collegato ai
+comandi del mixer:
+
+- **File locali**: dal pannello "Libreria" -> tab "File locali", scegli uno o
+  più file audio dal computer e mandali su Deck 1 o Deck 2. Passano per un
+  vero grafico Web Audio, quindi **EQ, volume, tempo e jog funzionano
+  davvero** sull'audio.
+- **YouTube**: tab "YouTube". Serve una tua **API key di YouTube Data API
+  v3** (creala su Google Cloud Console, abilita "YouTube Data API v3",
+  genera una API key) - resta salvata solo nel tuo browser (`localStorage`).
+  Cerca un brano, mandalo su un deck: viene riprodotto tramite il player
+  ufficiale YouTube (nessun download). Limiti noti:
+  - **niente EQ** (YouTube non espone i dati audio grezzi al browser, quindi
+    i knob LOW/MID/HIGH non hanno effetto sulle tracce YouTube);
+  - il **tempo** viene approssimato ai pochi valori discreti che l'API
+    permette (0.25/0.5/0.75/1/1.25/1.5/1.75/2x), non è continuo come sui file
+    locali;
+  - volume e crossfader funzionano normalmente.
+  - Nota d'uso: stai incorporando video con il player ufficiale di YouTube,
+    non scaricando né ridistribuendo l'audio. Se il progetto è per un uso
+    pubblico (es. eventi con pubblico pagante), verifica comunque i termini
+    di servizio di YouTube per la tua situazione specifica.
+
+Il volume/EQ/tempo/crossfader del mixer sono già collegati ai deck tramite
+`useAudioEngine` (vedi `src/audio/useAudioEngine.ts`): non serve altro
+codice per farli funzionare, sia con file locali che con YouTube.
+
+
 
 | Controllo | Canale/Status | Note/CC |
 |---|---|---|

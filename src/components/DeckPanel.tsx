@@ -1,4 +1,71 @@
 import { Box, Paper, Typography, LinearProgress } from '@mui/material';
+import type { DeckSnapshot } from '../audio/deck';
+
+function formatTime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function NowPlaying({ track, color, ytContainerId }: { track: DeckSnapshot; color: string; ytContainerId: string }) {
+  const progress = track.duration > 0 ? (track.currentTime / track.duration) * 100 : 0;
+  return (
+    <Box mb={2}>
+      <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+        {track.sourceType && (
+          <Box
+            sx={{
+              fontSize: 9,
+              fontFamily: 'JetBrains Mono, monospace',
+              px: 0.6,
+              py: 0.2,
+              borderRadius: 0.5,
+              border: `1px solid ${color}`,
+              color,
+              flexShrink: 0,
+            }}
+          >
+            {track.sourceType === 'local' ? 'FILE' : 'YOUTUBE'}
+          </Box>
+        )}
+        <Typography variant="body2" noWrap sx={{ opacity: track.title ? 0.9 : 0.4, flex: 1 }}>
+          {track.title ?? 'Nessuna traccia caricata'}
+        </Typography>
+      </Box>
+
+      <Box display="flex" alignItems="center" gap={1}>
+        {/* Contenitore persistente per il player YouTube: si popola solo se la sorgente è YouTube */}
+        <Box
+          id={ytContainerId}
+          sx={{
+            width: track.sourceType === 'youtube' ? 160 : 0,
+            height: track.sourceType === 'youtube' ? 90 : 0,
+            overflow: 'hidden',
+            borderRadius: 1,
+            flexShrink: 0,
+            transition: 'width 120ms, height 120ms',
+          }}
+        />
+        <Box flex={1}>
+          <LinearProgress
+            variant="determinate"
+            value={progress}
+            sx={{
+              height: 6,
+              borderRadius: 3,
+              background: '#181b20',
+              '& .MuiLinearProgress-bar': { background: color },
+            }}
+          />
+          <Typography variant="caption" sx={{ opacity: 0.5, fontFamily: 'JetBrains Mono, monospace', fontSize: 10 }}>
+            {formatTime(track.currentTime)} / {formatTime(track.duration)}
+          </Typography>
+        </Box>
+      </Box>
+    </Box>
+  );
+}
 
 function Knob({ label, value, color }: { label: string; value: number; color: string }) {
   const angle = -135 + value * 270; // -135°..+135°
@@ -94,8 +161,10 @@ export function DeckPanel(props: {
   hotcueActive: Record<number, boolean>;
   jogAngle: number;
   jogTouched: boolean;
+  track: DeckSnapshot;
+  ytContainerId: string;
 }) {
-  const { deck, color, values, hotcueActive, jogAngle, jogTouched } = props;
+  const { deck, color, values, hotcueActive, jogAngle, jogTouched, track, ytContainerId } = props;
   const v = (name: string) => values[`${deck}.${name}`] ?? 0;
   const pressed = (name: string) => (values[`${deck}.${name}`] ?? 0) > 0;
 
@@ -126,6 +195,7 @@ export function DeckPanel(props: {
         </Box>
       </Box>
 
+      <NowPlaying track={track} color={color} ytContainerId={ytContainerId} />
       <Box display="flex" gap={2} alignItems="center" mb={2}>
         {/* Jog wheel */}
         <Box

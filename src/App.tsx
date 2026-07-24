@@ -4,7 +4,9 @@ import { StatusBar } from './components/StatusBar';
 import { DeckPanel } from './components/DeckPanel';
 import { MasterPanel } from './components/MasterPanel';
 import { EventLog } from './components/EventLog';
+import { LibraryPanel } from './components/LibraryPanel';
 import { useDDJ200 } from './midi/useDDJ200';
+import { useAudioEngine } from './audio/useAudioEngine';
 import { palette } from './theme';
 
 function useJogAngles(onEvent: ReturnType<typeof useDDJ200>['onEvent']) {
@@ -35,15 +37,12 @@ function extractHotcues(values: Record<string, number>, deck: 1 | 2) {
 export default function App() {
   const ddj = useDDJ200();
   const jogAngles = useJogAngles(ddj.onEvent);
+  const { engine, snapshots } = useAudioEngine(ddj.onEvent);
 
-  // Esempio di integrazione: qui il "tuo programma" si aggancia agli eventi
-  // decodificati per applicare la propria logica (mixare audio, pilotare luci,
-  // ecc.). Basta sostituire il console.log con la propria funzione.
-  useEffect(() => {
-    return ddj.onEvent(() => {
-      // console.log('DDJ-200 ->', event);
-    });
-  }, [ddj]);
+  function handleConnect() {
+    engine.resume(); // sblocca l'AudioContext dentro un gesto utente reale (click)
+    ddj.connect();
+  }
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: palette.bg, py: 4 }}>
@@ -54,7 +53,7 @@ export default function App() {
             error={ddj.error}
             inputs={ddj.inputs}
             selectedInputId={ddj.selectedInputId}
-            onConnect={ddj.connect}
+            onConnect={handleConnect}
             onSelectInput={ddj.selectInput}
           />
         </Paper>
@@ -80,6 +79,8 @@ export default function App() {
             hotcueActive={extractHotcues(ddj.values, 1)}
             jogAngle={jogAngles[1]}
             jogTouched={(ddj.values['1.jog_touch'] ?? 0) > 0}
+            track={snapshots[1]}
+            ytContainerId={engine.decks[1].getYtContainerId()}
           />
           <DeckPanel
             deck={2}
@@ -88,6 +89,8 @@ export default function App() {
             hotcueActive={extractHotcues(ddj.values, 2)}
             jogAngle={jogAngles[2]}
             jogTouched={(ddj.values['2.jog_touch'] ?? 0) > 0}
+            track={snapshots[2]}
+            ytContainerId={engine.decks[2].getYtContainerId()}
           />
         </Box>
 
@@ -95,11 +98,19 @@ export default function App() {
           <MasterPanel values={ddj.values} />
         </Box>
 
+        <Box mb={2}>
+          <LibraryPanel
+            onLoadLocal={(deck, file) => engine.decks[deck].loadLocalFile(file)}
+            onLoadYoutube={(deck, videoId, title) => engine.decks[deck].loadYoutube(videoId, title)}
+          />
+        </Box>
+
         <EventLog log={ddj.log} />
 
         <Typography variant="caption" sx={{ opacity: 0.5, display: 'block', mt: 2 }}>
           Integrazione: usa <code>ddj.onEvent(callback)</code> nel tuo codice per ricevere ogni comando gia decodificato
-          (pulsante, hotcue, knob, fader, jog) e applicarlo alla tua applicazione.
+          (pulsante, hotcue, knob, fader, jog) e applicarlo alla tua applicazione. La riproduzione (locale e YouTube) e
+          gia collegata tramite <code>useAudioEngine</code>.
         </Typography>
       </Container>
     </Box>
