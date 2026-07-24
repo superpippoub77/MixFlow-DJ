@@ -1,10 +1,12 @@
 import { Deck } from './deck';
 import { CueMonitor } from './cueOutput';
+import { FxEngine } from './fxPads';
 
 export class AudioEngine {
   readonly ctx: AudioContext;
   private readonly masterGain: GainNode;
   readonly decks: Record<1 | 2, Deck>;
+  readonly fx: FxEngine;
 
   private readonly cueBus: GainNode;
   private readonly cueDestination: MediaStreamAudioDestinationNode;
@@ -43,6 +45,8 @@ export class AudioEngine {
     // Bus di registrazione: cattura il mix finale (master, post-crossfader) per il MixRecorder.
     this.recordingDestination = this.ctx.createMediaStreamDestination();
     this.masterGain.connect(this.recordingDestination);
+
+    this.fx = new FxEngine(this.ctx, this.masterGain);
   }
 
   getRecordingStream(): MediaStream {

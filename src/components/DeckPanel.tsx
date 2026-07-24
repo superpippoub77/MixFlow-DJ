@@ -157,19 +157,21 @@ function JumpToTime({ color, onJump }: { color: string; onJump: (seconds: number
   );
 }
 
-/** Coda del deck: elenco visibile, con skip / rimozione / riordino */
+/** Coda del deck: elenco visibile, con skip / rimozione / riordino (frecce o drag&drop col mouse) */
 function QueueList({
   queue,
   color,
   onSkipNext,
   onRemove,
   onMove,
+  onReorderDrop,
 }: {
   queue: QueueEntry[];
   color: string;
   onSkipNext: () => void;
   onRemove: (id: string) => void;
   onMove: (id: string, direction: 'up' | 'down') => void;
+  onReorderDrop: (draggedId: string, targetId: string) => void;
 }) {
   if (queue.length === 0) return null;
   return (
@@ -196,7 +198,27 @@ function QueueList({
       </Box>
       <Box display="flex" flexDirection="column" gap={0.4}>
         {queue.map((item, i) => (
-          <Box key={item.id} display="flex" alignItems="center" gap={0.5}>
+          <Box
+            key={item.id}
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData('text/plain', item.id);
+              e.dataTransfer.effectAllowed = 'move';
+            }}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              const draggedId = e.dataTransfer.getData('text/plain');
+              if (draggedId && draggedId !== item.id) onReorderDrop(draggedId, item.id);
+            }}
+            display="flex"
+            alignItems="center"
+            gap={0.5}
+            sx={{ cursor: 'grab', borderRadius: 0.5, '&:hover': { background: '#1c1f25' } }}
+          >
+            <Typography variant="caption" sx={{ opacity: 0.35, fontSize: 11, px: 0.25 }}>
+              ⠿
+            </Typography>
             <Typography variant="caption" noWrap sx={{ flex: 1, opacity: 0.8, fontSize: 11 }}>
               {i + 1}. {item.title}
             </Typography>
@@ -218,6 +240,9 @@ function QueueList({
           </Box>
         ))}
       </Box>
+      <Typography variant="caption" sx={{ opacity: 0.35, fontSize: 9, display: 'block', mt: 0.5 }}>
+        Trascina ⠿ per riordinare (mouse) o usa ▲▼ (anche da touch/mobile).
+      </Typography>
     </Box>
   );
 }
@@ -436,6 +461,7 @@ export function DeckPanel(props: {
   onSkipNext: () => void;
   onRemoveQueueItem: (id: string) => void;
   onMoveQueueItem: (id: string, direction: 'up' | 'down') => void;
+  onReorderQueueDrop: (draggedId: string, targetId: string) => void;
   onHotCue: (pad: number) => void;
 }) {
   const {
@@ -462,6 +488,7 @@ export function DeckPanel(props: {
     onSkipNext,
     onRemoveQueueItem,
     onMoveQueueItem,
+    onReorderQueueDrop,
     onHotCue,
   } = props;
   const v = (name: string) => values[`${deck}.${name}`] ?? 0;
@@ -492,7 +519,14 @@ export function DeckPanel(props: {
 
       <NowPlaying track={track} color={color} ytContainerId={ytContainerId} onSeek={onSeek} bpm={bpm} />
       <JumpToTime color={color} onJump={onJumpToTime} />
-      <QueueList queue={queue} color={color} onSkipNext={onSkipNext} onRemove={onRemoveQueueItem} onMove={onMoveQueueItem} />
+      <QueueList
+        queue={queue}
+        color={color}
+        onSkipNext={onSkipNext}
+        onRemove={onRemoveQueueItem}
+        onMove={onMoveQueueItem}
+        onReorderDrop={onReorderQueueDrop}
+      />
 
       <Box display="flex" gap={2} alignItems="flex-start" flexWrap="wrap" flex={1}>
         {/* Colonna jog + trasporto, come sull'hardware */}

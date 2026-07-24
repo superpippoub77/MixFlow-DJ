@@ -6,6 +6,7 @@ import { MasterPanel } from './components/MasterPanel';
 import { EventLog } from './components/EventLog';
 import { LibraryPanel } from './components/LibraryPanel';
 import { RecordingPanel, type Recording } from './components/RecordingPanel';
+import { FxPadPanel } from './components/FxPadPanel';
 import { InfoDialog } from './components/InfoDialog';
 import { Footer } from './components/Footer';
 import { useDDJ200 } from './midi/useDDJ200';
@@ -237,6 +238,18 @@ export default function App() {
     });
   }
 
+  function handleReorderQueueDrop(deck: 1 | 2, draggedId: string, targetId: string) {
+    setQueues((prev) => {
+      const list = [...prev[deck]];
+      const fromIdx = list.findIndex((item) => item.id === draggedId);
+      const toIdx = list.findIndex((item) => item.id === targetId);
+      if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return prev;
+      const [moved] = list.splice(fromIdx, 1);
+      list.splice(toIdx, 0, moved);
+      return { ...prev, [deck]: list };
+    });
+  }
+
   // Avanza automaticamente alla prossima traccia in coda quando quella attuale finisce da sola
   useEffect(() => {
     const unsub1 = engine.decks[1].onEnded(() => advanceQueue(1));
@@ -303,6 +316,7 @@ export default function App() {
               onSkipNext={() => advanceQueue(1)}
               onRemoveQueueItem={(id) => handleRemoveFromQueue(1, id)}
               onMoveQueueItem={(id, dir) => handleMoveQueueItem(1, id, dir)}
+              onReorderQueueDrop={(draggedId, targetId) => handleReorderQueueDrop(1, draggedId, targetId)}
               onHotCue={(pad) => handleHotCue(1, pad)}
             />
           </Box>
@@ -346,9 +360,36 @@ export default function App() {
               onSkipNext={() => advanceQueue(2)}
               onRemoveQueueItem={(id) => handleRemoveFromQueue(2, id)}
               onMoveQueueItem={(id, dir) => handleMoveQueueItem(2, id, dir)}
+              onReorderQueueDrop={(draggedId, targetId) => handleReorderQueueDrop(2, draggedId, targetId)}
               onHotCue={(pad) => handleHotCue(2, pad)}
             />
           </Box>
+        </Box>
+
+        <Box mb={2}>
+          <FxPadPanel
+            onSiren={() => {
+              engine.resume();
+              engine.fx.triggerSiren();
+            }}
+            onRiser={() => {
+              engine.resume();
+              engine.fx.triggerRiser();
+            }}
+            onAirhorn={() => {
+              engine.resume();
+              engine.fx.triggerAirhorn();
+            }}
+            onNoiseSweep={() => {
+              engine.resume();
+              engine.fx.triggerNoiseSweep();
+            }}
+            onToggleEcho={() => {
+              engine.resume();
+              engine.fx.toggleEcho();
+            }}
+            echoActive={engine.fx.isEchoActive()}
+          />
         </Box>
 
         <Box mb={2}>

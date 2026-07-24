@@ -254,8 +254,28 @@ dover ascoltare tutto il brano dall'inizio.
 ## Coda per deck: visibile e modificabile
 
 La coda di ogni deck ora è visibile per intero sotto il titolo, non solo un
-contatore: ogni brano in coda ha le frecce **▲▼** per riordinarlo e una **×**
-per rimuoverlo, oltre al pulsante **SKIP ▶** per passare subito al prossimo.
+contatore: puoi **trascinare** un brano (icona ⠿, mouse) per riordinarlo, o
+usare le frecce **▲▼** (funzionano anche da touch/mobile, dove il drag&drop
+nativo HTML non è affidabile), oltre a **×** per rimuoverlo e **SKIP ▶** per
+passare subito al prossimo.
+
+## Pad FX
+
+Nuovo pannello "Pad FX" con effetti classici da DJ set **generati al momento
+con Web Audio** (oscillatori/rumore sintetizzati in `src/audio/fxPads.ts`,
+nessun campione audio esterno — zero problemi di copyright):
+
+- **SIRENA** — oscillatore che sale/scende ciclicamente
+- **AEREO** — rumore + oscillatore che salgono di tono insieme con taglio
+  secco finale (il classico riser da drop)
+- **AIR HORN** — tre onde sovrapposte, come l'accordo di un corno da stadio
+- **NOISE SWEEP** — rumore filtrato che cresce e si ferma di colpo
+- **ECHO** — non è un pad "usa e getta" ma un interruttore: attiva/disattiva
+  un delay/feedback vero sul master, per il classico "buttare in eco" prima
+  di una transizione
+
+Tutti mandati sul bus master, quindi li senti anche in registrazione e sul
+Master Cue.
 
 ## Ordinamento della libreria per BPM
 

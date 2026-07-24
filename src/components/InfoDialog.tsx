@@ -79,18 +79,26 @@ export function InfoDialog({ open, onClose }: { open: boolean; onClose: () => vo
 
         <Section title="7. Coda per deck">
           Ogni deck può avere più brani in fila: se mandi un brano su un deck già occupato, si mette in coda invece di
-          interrompere quello in corso. La coda è visibile sotto il titolo di ogni deck: puoi <b>riordinarla</b> con le
-          frecce ▲▼ o <b>rimuovere</b> un brano con ×. Quando il brano attuale finisce da solo, parte automaticamente
-          il prossimo in coda; "SKIP ▶" salta subito, senza aspettare la fine.
+          interrompere quello in corso. La coda è visibile sotto il titolo di ogni deck: puoi <b>trascinare</b> (icona ⠿,
+          mouse) o usare le frecce <b>▲▼</b> (anche da touch) per riordinarla, o <b>rimuovere</b> un brano con ×. Quando
+          il brano attuale finisce da solo, parte automaticamente il prossimo in coda; "SKIP ▶" salta subito.
         </Section>
 
-        <Section title="8. Ordinare la libreria per BPM">
+        <Section title="8. Pad FX">
+          Il pannello "Pad FX" ha effetti classici da DJ set generati al momento (nessun campione audio, quindi zero
+          problemi di copyright): <b>SIRENA</b>, <b>AEREO</b> (il riser da drop), <b>AIR HORN</b>, <b>NOISE SWEEP</b> —
+          un click li fa partire sopra al mix, si sentono anche in registrazione e sul Master Cue. <b>ECHO</b> è invece
+          un interruttore: attiva/disattiva un delay sul master, per il classico "buttare in eco" prima di una
+          transizione.
+        </Section>
+
+        <Section title="9. Ordinare la libreria per BPM">
           Nella Libreria, tab "File locali", ogni brano caricato viene analizzato in background per stimarne il BPM
           (etichetta sotto il nome file). Con almeno due brani caricati compare "Ordina per BPM": un click alterna tra
           nessun ordine, crescente e decrescente — utile per costruire una scaletta che sale/scende di energia.
         </Section>
 
-        <Section title="9. Limiti da conoscere (YouTube)">
+        <Section title="10. Limiti da conoscere (YouTube)">
           Le tracce YouTube passano dal player ufficiale incorporato, che il browser isola per motivi di
           sicurezza/copyright: niente accesso ai dati audio grezzi. Per questo su YouTube <b>EQ e filtro non hanno
           effetto</b>, il <b>preview in cuffia non è disponibile</b>, il <b>BPM non viene rilevato</b> (niente ordinamento
@@ -99,7 +107,7 @@ export function InfoDialog({ open, onClose }: { open: boolean; onClose: () => vo
           locali restano l'esperienza completa.
         </Section>
 
-        <Section title="10. Controller vs mouse/touch">
+        <Section title="11. Controller vs mouse/touch">
           Tutta l'interfaccia funziona anche senza il DDJ-200 collegato: ogni controllo risponde al mouse/touch. Se poi
           colleghi il controller, i suoi comandi hanno sempre l'ultima parola su quel controllo.
         </Section>
