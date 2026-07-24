@@ -5,11 +5,14 @@ import { DeckPanel } from './components/DeckPanel';
 import { MasterPanel } from './components/MasterPanel';
 import { EventLog } from './components/EventLog';
 import { LibraryPanel } from './components/LibraryPanel';
+import { RecordingPanel, type Recording } from './components/RecordingPanel';
+import { InfoDialog } from './components/InfoDialog';
 import { Footer } from './components/Footer';
 import { useDDJ200 } from './midi/useDDJ200';
 import { useAudioEngine } from './audio/useAudioEngine';
 import { useAutoMix } from './audio/useAutoMix';
 import { detectBpm } from './audio/bpmDetect';
+import { MixRecorder } from './audio/recorder';
 import { palette } from './theme';
 
 type QueueItem = { source: 'local'; file: File; title: string } | { source: 'youtube'; videoId: string; title: string };
@@ -29,14 +32,6 @@ function useJogAngles(onEvent: ReturnType<typeof useDDJ200>['onEvent']) {
   }, [onEvent]);
 
   return angles;
-}
-
-function extractHotcues(values: Record<string, number>, deck: 1 | 2) {
-  const result: Record<number, boolean> = {};
-  for (let pad = 1; pad <= 8; pad++) {
-    result[pad] = (values[`${deck}.hotcue_${pad}`] ?? 0) > 0;
-  }
-  return result;
 }
 
 /**
@@ -76,6 +71,41 @@ export default function App() {
   const { values, setManual } = useManualOverrides(ddj.onEvent, ddj.values);
   const [bpms, setBpms] = useState<Record<1 | 2, number | null>>({ 1: null, 2: null });
   const [queues, setQueues] = useState<Record<1 | 2, QueueItem[]>>({ 1: [], 2: [] });
+  const [infoOpen, setInfoOpen] = useState(false);
+
+  // --- registrazione del mix ---
+  const recorderRef = useRef<MixRecorder | null>(null);
+  if (!recorderRef.current) recorderRef.current = new MixRecorder(engine.getRecordingStream());
+  const [recording, setRecording] = useState(false);
+  const [recordElapsed, setRecordElapsed] = useState(0);
+  const [recordings, setRecordings] = useState<Recording[]>([]);
+  const recordStartRef = useRef(0);
+
+  useEffect(() => {
+    recorderRef.current!.onStop = (blob, durationSeconds) => {
+      const url = URL.createObjectURL(blob);
+      setRecordings((prev) => [...prev, { url, name: `mixflowdj-${new Date().toISOString().replace(/[:.]/g, '-')}.webm`, durationSeconds }]);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!recording) return;
+    const interval = setInterval(() => setRecordElapsed((performance.now() - recordStartRef.current) / 1000), 500);
+    return () => clearInterval(interval);
+  }, [recording]);
+
+  function handleToggleRecord() {
+    engine.resume();
+    if (recording) {
+      recorderRef.current!.stop();
+      setRecording(false);
+    } else {
+      recordStartRef.current = performance.now();
+      setRecordElapsed(0);
+      recorderRef.current!.start();
+      setRecording(true);
+    }
+  }
 
   function handleCrossfaderChange(value: number) {
     engine.setCrossfader(value);
@@ -130,6 +160,10 @@ export default function App() {
   }
   function handleSelectCueDevice(deviceId: string) {
     engine.cueMonitor.setOutputDevice(deviceId);
+  }
+  function handleHotCue(deck: 1 | 2, pad: number) {
+    engine.resume();
+    engine.decks[deck].setHotCueOrJump(pad);
   }
 
   // --- caricamento diretto (sostituisce subito quello che sta suonando sul deck) ---
@@ -191,6 +225,7 @@ export default function App() {
             selectedInputId={ddj.selectedInputId}
             onConnect={handleConnect}
             onSelectInput={ddj.selectInput}
+            onInfoClick={() => setInfoOpen(true)}
           />
         </Paper>
 
@@ -214,7 +249,6 @@ export default function App() {
               deck={1}
               color={palette.deck1}
               values={values}
-              hotcueActive={extractHotcues(values, 1)}
               jogAngle={jogAngles[1]}
               jogTouched={(values['1.jog_touch'] ?? 0) > 0}
               track={snapshots[1]}
@@ -230,6 +264,7 @@ export default function App() {
               onTempoChange={(val) => handleTempoChange(1, val)}
               onToggleCue={() => handleToggleCue(1)}
               onSkipNext={() => advanceQueue(1)}
+              onHotCue={(pad) => handleHotCue(1, pad)}
             />
           </Box>
 
@@ -252,7 +287,6 @@ export default function App() {
               deck={2}
               color={palette.deck2}
               values={values}
-              hotcueActive={extractHotcues(values, 2)}
               jogAngle={jogAngles[2]}
               jogTouched={(values['2.jog_touch'] ?? 0) > 0}
               track={snapshots[2]}
@@ -268,8 +302,19 @@ export default function App() {
               onTempoChange={(val) => handleTempoChange(2, val)}
               onToggleCue={() => handleToggleCue(2)}
               onSkipNext={() => advanceQueue(2)}
+              onHotCue={(pad) => handleHotCue(2, pad)}
             />
           </Box>
+        </Box>
+
+        <Box mb={2}>
+          <RecordingPanel
+            supported={typeof MediaRecorder !== 'undefined'}
+            recording={recording}
+            elapsedSeconds={recordElapsed}
+            recordings={recordings}
+            onToggleRecord={handleToggleRecord}
+          />
         </Box>
 
         <Box mb={2}>
@@ -280,15 +325,12 @@ export default function App() {
 
         <Typography variant="caption" sx={{ opacity: 0.5, display: 'block', mt: 2 }}>
           Integrazione: usa <code>ddj.onEvent(callback)</code> nel tuo codice per ricevere ogni comando gia decodificato
-          (pulsante, hotcue, knob, fader, jog) e applicarlo alla tua applicazione. Tutti i controlli funzionano anche via
-          mouse/touch senza controller collegato; se il DDJ-200 è collegato, i suoi comandi hanno sempre la precedenza.
-          L'Automix (pulsante TRANSITION FX) mixa in automatico verso il deck successivo quando il brano attivo sta per
-          finire, sincronizzando il pitch se il BPM di entrambe le tracce è noto (solo file locali). Dalla Libreria, "→
-          D1/D2" carica subito se il deck è libero, altrimenti accoda il brano: parte da solo quando finisce quello
-          attuale (o subito con SKIP).
+          (pulsante, hotcue, knob, fader, jog) e applicarlo alla tua applicazione. Premi l'icona ⓘ in alto per la guida
+          completa a tutte le funzioni.
         </Typography>
       </Container>
       <Footer />
+      <InfoDialog open={infoOpen} onClose={() => setInfoOpen(false)} />
     </Box>
   );
 }

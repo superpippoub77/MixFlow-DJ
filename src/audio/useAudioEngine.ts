@@ -57,6 +57,10 @@ export function useAudioEngine(onEvent: (cb: (e: DDJ200Event) => void) => () => 
       if (event.kind === 'button' && event.control === 'headphone_cue' && event.pressed) {
         engine.decks[deck].toggleCue();
       }
+      if (event.kind === 'hotcue' && event.pressed) {
+        if (event.action === 'activate') engine.decks[deck].setHotCueOrJump(event.pad);
+        else engine.decks[deck].clearHotCue(event.pad);
+      }
       if (event.kind === 'knob' && event.control.startsWith('eq_')) {
         const band = event.control.slice(3) as 'low' | 'mid' | 'high';
         engine.decks[deck].setEQ(band, event.value);

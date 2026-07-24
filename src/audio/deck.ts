@@ -10,6 +10,7 @@ export interface DeckSnapshot {
   currentTime: number;
   duration: number;
   cueActive: boolean;
+  hotCues: Record<number, boolean>;
 }
 
 // Il fader del tempo del DDJ-200 di default copre ±8% (selezionabile in
@@ -43,6 +44,7 @@ export class Deck {
   private volumeFader = 1; // posizione 0..1 del fader volume del mixer
   private crossfaderGain = 1; // 0..1, calcolato dal crossfader master
   private cueActive = false;
+  private hotCues: Record<number, number | null> = { 1: null, 2: null, 3: null, 4: null, 5: null, 6: null, 7: null, 8: null };
 
   private listeners = new Set<() => void>();
   private endedListeners = new Set<() => void>();
@@ -144,6 +146,7 @@ export class Deck {
     this.audioEl = el;
     this.sourceType = 'local';
     this.title = file.name;
+    this.resetHotCues();
     this.notify();
   }
 
@@ -151,6 +154,7 @@ export class Deck {
     this.audioEl?.pause();
     this.sourceType = 'youtube';
     this.title = title;
+    this.resetHotCues();
     this.notify();
 
     const YT = await loadYouTubeIframeApi();
@@ -304,6 +308,32 @@ export class Deck {
     return this.cueActive;
   }
 
+  /**
+   * Hot cue: il primo tocco su un pad libero salva la posizione attuale;
+   * toccare un pad già impostato salta subito lì (e avvia la riproduzione),
+   * come le hot cue di un lettore/mixer vero.
+   */
+  setHotCueOrJump(pad: number) {
+    if (this.sourceType === null) return;
+    const existing = this.hotCues[pad];
+    if (existing == null) {
+      this.hotCues[pad] = this.getCurrentTime();
+    } else {
+      this.seekTo(existing);
+      this.play();
+    }
+    this.notify();
+  }
+
+  clearHotCue(pad: number) {
+    this.hotCues[pad] = null;
+    this.notify();
+  }
+
+  private resetHotCues() {
+    for (const pad of Object.keys(this.hotCues)) this.hotCues[Number(pad)] = null;
+  }
+
   /** Chiamato dall'AudioEngine ogni volta che cambia il fader volume o il crossfader */
   setMix(volumeFader: number, crossfaderGain: number) {
     this.volumeFader = volumeFader;
@@ -314,6 +344,8 @@ export class Deck {
   }
 
   getSnapshot(): DeckSnapshot {
+    const hotCues: Record<number, boolean> = {};
+    for (const pad of Object.keys(this.hotCues)) hotCues[Number(pad)] = this.hotCues[Number(pad)] != null;
     return {
       sourceType: this.sourceType,
       title: this.title,
@@ -321,6 +353,7 @@ export class Deck {
       currentTime: this.getCurrentTime(),
       duration: this.getDuration(),
       cueActive: this.cueActive,
+      hotCues,
     };
   }
 }

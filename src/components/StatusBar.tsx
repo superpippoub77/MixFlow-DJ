@@ -1,5 +1,6 @@
-import { Box, Button, Chip, MenuItem, Select, Typography } from '@mui/material';
+import { Box, Button, Chip, MenuItem, Select, Typography, IconButton, Tooltip } from '@mui/material';
 import UsbIcon from '@mui/icons-material/Usb';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import type { ConnectionStatus, MidiInputInfo } from '../midi/useDDJ200';
 
 const STATUS_LABEL: Record<ConnectionStatus, string> = {
@@ -27,14 +28,20 @@ export function StatusBar(props: {
   selectedInputId?: string;
   onConnect: () => void;
   onSelectInput: (id: string) => void;
+  onInfoClick: () => void;
 }) {
-  const { status, error, inputs, selectedInputId, onConnect, onSelectInput } = props;
+  const { status, error, inputs, selectedInputId, onConnect, onSelectInput, onInfoClick } = props;
 
   return (
     <Box display="flex" alignItems="center" gap={2} flexWrap="wrap">
       <Box display="flex" alignItems="center" gap={1}>
         <UsbIcon fontSize="small" sx={{ opacity: 0.7 }} />
         <Typography variant="h6">DDJ-200 MIDI Bridge</Typography>
+        <Tooltip title="Come funziona il programma">
+          <IconButton size="small" onClick={onInfoClick} sx={{ opacity: 0.7 }}>
+            <InfoOutlinedIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
       </Box>
 
       <Chip size="small" label={STATUS_LABEL[status]} color={STATUS_COLOR[status]} variant="outlined" />

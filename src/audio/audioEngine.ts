@@ -12,6 +12,8 @@ export class AudioEngine {
   readonly cueMonitor: CueMonitor;
   private masterCueActive = false;
 
+  private readonly recordingDestination: MediaStreamAudioDestinationNode;
+
   private volumeFaders: Record<1 | 2, number> = { 1: 1, 2: 1 };
   private crossfaderPos = 0.5; // 0 = tutto Deck 1, 1 = tutto Deck 2
 
@@ -37,6 +39,14 @@ export class AudioEngine {
       1: new Deck(1, this.ctx, this.masterGain, this.cueBus),
       2: new Deck(2, this.ctx, this.masterGain, this.cueBus),
     };
+
+    // Bus di registrazione: cattura il mix finale (master, post-crossfader) per il MixRecorder.
+    this.recordingDestination = this.ctx.createMediaStreamDestination();
+    this.masterGain.connect(this.recordingDestination);
+  }
+
+  getRecordingStream(): MediaStream {
+    return this.recordingDestination.stream;
   }
 
   /** Da chiamare dentro un gesto utente reale (click) per sbloccare l'AudioContext */

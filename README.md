@@ -206,6 +206,31 @@ altoparlanti).
 
 
 
+## Performance pad (hot cue vere)
+
+Gli 8 pad per deck ora salvano davvero un punto nel brano: primo click su un
+pad spento = salva la posizione attuale; click su un pad già acceso = salta
+subito lì e riparte la riproduzione. Caricare un nuovo brano sul deck
+azzera tutti i suoi pad. Da controller fisico, SHIFT+pad cancella un singolo
+hot cue.
+
+## Registrazione del mix
+
+Il pannello "Registrazione" cattura tutto quello che esce dal Master (il mix
+finale, crossfader incluso) tramite `MediaRecorder` e produce un file webm
+scaricabile a fine registrazione. Puoi registrare più take nella stessa
+sessione (restano elencati con un link di download finché non ricarichi la
+pagina). Implementato in `src/audio/recorder.ts` (classe `MixRecorder`).
+
+## Pulsante Info
+
+L'icona ⓘ accanto al titolo apre una guida in-app (`src/components/InfoDialog.tsx`)
+che spiega mixaggio, performance pad, automix, preview in cuffia,
+registrazione, code per deck e i limiti noti su YouTube — utile come
+riferimento rapido per chi usa il programma senza aver letto questo README.
+
+
+
 ## Mappa MIDI (riassunto)
 
 | Controllo | Canale/Status | Note/CC |

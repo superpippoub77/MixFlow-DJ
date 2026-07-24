@@ -215,7 +215,7 @@ function Fader({ label, value, color, onChange }: { label: string; value: number
   );
 }
 
-function PadGrid({ active, color }: { active: Record<number, boolean>; color: string }) {
+function PadGrid({ active, color, onPad }: { active: Record<number, boolean>; color: string; onPad: (pad: number) => void }) {
   return (
     <Box>
       <Typography variant="caption" sx={{ opacity: 0.5, fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.1em', mb: 0.5, display: 'block' }}>
@@ -225,6 +225,7 @@ function PadGrid({ active, color }: { active: Record<number, boolean>; color: st
         {[1, 2, 3, 4, 5, 6, 7, 8].map((pad) => (
           <Box
             key={pad}
+            onClick={() => onPad(pad)}
             sx={{
               height: 32,
               borderRadius: 1,
@@ -234,6 +235,7 @@ function PadGrid({ active, color }: { active: Record<number, boolean>; color: st
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              cursor: 'pointer',
             }}
           >
             <Typography variant="caption" sx={{ fontSize: 10, opacity: active[pad] ? 1 : 0.4, color: active[pad] ? '#111' : undefined }}>
@@ -284,7 +286,6 @@ export function DeckPanel(props: {
   deck: 1 | 2;
   color: string;
   values: Record<string, number>;
-  hotcueActive: Record<number, boolean>;
   jogAngle: number;
   jogTouched: boolean;
   track: DeckSnapshot;
@@ -300,12 +301,12 @@ export function DeckPanel(props: {
   onTempoChange: (value: number) => void;
   onToggleCue: () => void;
   onSkipNext: () => void;
+  onHotCue: (pad: number) => void;
 }) {
   const {
     deck,
     color,
     values,
-    hotcueActive,
     jogAngle,
     jogTouched,
     track,
@@ -321,6 +322,7 @@ export function DeckPanel(props: {
     onTempoChange,
     onToggleCue,
     onSkipNext,
+    onHotCue,
   } = props;
   const v = (name: string) => values[`${deck}.${name}`] ?? 0;
   const pressed = (name: string) => (values[`${deck}.${name}`] ?? 0) > 0;
@@ -480,7 +482,7 @@ export function DeckPanel(props: {
         {/* Volume + pad, occupano lo spazio restante */}
         <Box flex={1} minWidth={180} display="flex" flexDirection="column" gap={1.5}>
           <Fader label="VOLUME" value={v('volume')} color={color} onChange={onVolumeChange} />
-          <PadGrid active={hotcueActive} color={color} />
+          <PadGrid active={track.hotCues} color={color} onPad={onHotCue} />
         </Box>
       </Box>
     </Paper>
