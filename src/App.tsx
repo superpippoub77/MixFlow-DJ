@@ -12,6 +12,8 @@ import { useAutoMix } from './audio/useAutoMix';
 import { detectBpm } from './audio/bpmDetect';
 import { palette } from './theme';
 
+type QueueItem = { source: 'local'; file: File; title: string } | { source: 'youtube'; videoId: string; title: string };
+
 function useJogAngles(onEvent: ReturnType<typeof useDDJ200>['onEvent']) {
   const [angles, setAngles] = useState<Record<1 | 2, number>>({ 1: 0, 2: 0 });
   const anglesRef = useRef(angles);
@@ -73,6 +75,7 @@ export default function App() {
   const { engine, snapshots } = useAudioEngine(ddj.onEvent);
   const { values, setManual } = useManualOverrides(ddj.onEvent, ddj.values);
   const [bpms, setBpms] = useState<Record<1 | 2, number | null>>({ 1: null, 2: null });
+  const [queues, setQueues] = useState<Record<1 | 2, QueueItem[]>>({ 1: [], 2: [] });
 
   function handleCrossfaderChange(value: number) {
     engine.setCrossfader(value);
@@ -82,7 +85,7 @@ export default function App() {
   const automix = useAutoMix(engine, snapshots, bpms, handleCrossfaderChange);
 
   function handleConnect() {
-    engine.resume(); // sblocca l'AudioContext dentro un gesto utente reale (click)
+    engine.resume(); // sblocca l'AudioContext (e il preview cuffie) dentro un gesto utente reale (click)
     ddj.connect();
   }
 
@@ -117,22 +120,65 @@ export default function App() {
     engine.decks[deck].setTempo(value);
     setManual(`${deck}.tempo`, value);
   }
+  function handleToggleCue(deck: 1 | 2) {
+    engine.resume();
+    engine.decks[deck].toggleCue();
+  }
+  function handleToggleMasterCue() {
+    engine.resume();
+    engine.setMasterCue(!engine.isMasterCueActive());
+  }
+  function handleSelectCueDevice(deviceId: string) {
+    engine.cueMonitor.setOutputDevice(deviceId);
+  }
+
+  // --- caricamento diretto (sostituisce subito quello che sta suonando sul deck) ---
+  function loadItem(deck: 1 | 2, item: QueueItem) {
+    engine.resume();
+    if (item.source === 'local') {
+      engine.decks[deck].loadLocalFile(item.file);
+      setBpms((prev) => ({ ...prev, [deck]: null }));
+      detectBpm(item.file).then((bpm) => setBpms((prev) => ({ ...prev, [deck]: bpm })));
+    } else {
+      engine.decks[deck].loadYoutube(item.videoId, item.title);
+      setBpms((prev) => ({ ...prev, [deck]: null }));
+    }
+  }
+
+  // --- dalla Libreria: se il deck è libero carica subito, altrimenti accoda ---
+  function enqueue(deck: 1 | 2, item: QueueItem) {
+    if (!snapshots[deck].title) {
+      loadItem(deck, item);
+    } else {
+      setQueues((prev) => ({ ...prev, [deck]: [...prev[deck], item] }));
+    }
+  }
 
   function handleLoadLocal(deck: 1 | 2, file: File) {
-    engine.resume();
-    engine.decks[deck].loadLocalFile(file);
-    setBpms((prev) => ({ ...prev, [deck]: null }));
-    // Stima del BPM in background: i file locali passano per il vero grafico
-    // Web Audio, quindi possiamo analizzarli. Non blocca il caricamento.
-    detectBpm(file).then((bpm) => setBpms((prev) => ({ ...prev, [deck]: bpm })));
+    enqueue(deck, { source: 'local', file, title: file.name });
+  }
+  function handleLoadYoutube(deck: 1 | 2, videoId: string, title: string) {
+    enqueue(deck, { source: 'youtube', videoId, title });
   }
 
-  function handleLoadYoutube(deck: 1 | 2, videoId: string, title: string) {
-    engine.resume();
-    engine.decks[deck].loadYoutube(videoId, title);
-    // YouTube non espone l'audio grezzo: il BPM automatico non è disponibile su questa sorgente.
-    setBpms((prev) => ({ ...prev, [deck]: null }));
+  function advanceQueue(deck: 1 | 2) {
+    setQueues((prev) => {
+      const [next, ...rest] = prev[deck];
+      if (next) loadItem(deck, next);
+      return { ...prev, [deck]: rest };
+    });
   }
+
+  // Avanza automaticamente alla prossima traccia in coda quando quella attuale finisce da sola
+  useEffect(() => {
+    const unsub1 = engine.decks[1].onEnded(() => advanceQueue(1));
+    const unsub2 = engine.decks[2].onEnded(() => advanceQueue(2));
+    return () => {
+      unsub1();
+      unsub2();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine]);
 
   return (
     <Box sx={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', bgcolor: palette.bg }}>
@@ -174,6 +220,7 @@ export default function App() {
               track={snapshots[1]}
               ytContainerId={engine.decks[1].getYtContainerId()}
               bpm={bpms[1]}
+              queueCount={queues[1].length}
               onPlay={() => handlePlay(1)}
               onCue={() => handleCue(1)}
               onSeek={(fraction) => handleSeek(1, fraction)}
@@ -181,6 +228,8 @@ export default function App() {
               onFilterChange={(val) => handleFilterChange(1, val)}
               onVolumeChange={(val) => handleVolumeChange(1, val)}
               onTempoChange={(val) => handleTempoChange(1, val)}
+              onToggleCue={() => handleToggleCue(1)}
+              onSkipNext={() => advanceQueue(1)}
             />
           </Box>
 
@@ -191,6 +240,10 @@ export default function App() {
               automixEnabled={automix.enabled}
               onToggleAutomix={() => automix.setEnabled((v) => !v)}
               automixStatus={automix.status}
+              masterCueActive={engine.isMasterCueActive()}
+              onToggleMasterCue={handleToggleMasterCue}
+              cueDeviceSupported={engine.cueMonitor.supportsDeviceSelection()}
+              onSelectCueDevice={handleSelectCueDevice}
             />
           </Box>
 
@@ -205,6 +258,7 @@ export default function App() {
               track={snapshots[2]}
               ytContainerId={engine.decks[2].getYtContainerId()}
               bpm={bpms[2]}
+              queueCount={queues[2].length}
               onPlay={() => handlePlay(2)}
               onCue={() => handleCue(2)}
               onSeek={(fraction) => handleSeek(2, fraction)}
@@ -212,6 +266,8 @@ export default function App() {
               onFilterChange={(val) => handleFilterChange(2, val)}
               onVolumeChange={(val) => handleVolumeChange(2, val)}
               onTempoChange={(val) => handleTempoChange(2, val)}
+              onToggleCue={() => handleToggleCue(2)}
+              onSkipNext={() => advanceQueue(2)}
             />
           </Box>
         </Box>
@@ -227,7 +283,9 @@ export default function App() {
           (pulsante, hotcue, knob, fader, jog) e applicarlo alla tua applicazione. Tutti i controlli funzionano anche via
           mouse/touch senza controller collegato; se il DDJ-200 è collegato, i suoi comandi hanno sempre la precedenza.
           L'Automix (pulsante TRANSITION FX) mixa in automatico verso il deck successivo quando il brano attivo sta per
-          finire, sincronizzando il pitch se il BPM di entrambe le tracce è noto (solo file locali).
+          finire, sincronizzando il pitch se il BPM di entrambe le tracce è noto (solo file locali). Dalla Libreria, "→
+          D1/D2" carica subito se il deck è libero, altrimenti accoda il brano: parte da solo quando finisce quello
+          attuale (o subito con SKIP).
         </Typography>
       </Container>
       <Footer />

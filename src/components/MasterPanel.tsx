@@ -1,7 +1,9 @@
-import { Box, Paper, Typography, Slider } from '@mui/material';
+import { useState } from 'react';
+import { Box, Paper, Typography, Slider, Select, MenuItem, Button } from '@mui/material';
 import { palette } from '../theme';
 import { DotDisplay } from './DotDisplay';
 import type { AutoMixStatus } from '../audio/useAutoMix';
+import { listAudioOutputDevices, type AudioOutputDevice } from '../audio/audioDevices';
 
 const CROSSFADER_MARKS = Array.from({ length: 11 }, (_, i) => ({ value: i * 10 }));
 
@@ -11,15 +13,42 @@ export function MasterPanel({
   automixEnabled,
   onToggleAutomix,
   automixStatus,
+  masterCueActive,
+  onToggleMasterCue,
+  cueDeviceSupported,
+  onSelectCueDevice,
 }: {
   values: Record<string, number>;
   onCrossfaderChange: (value: number) => void;
   automixEnabled: boolean;
   onToggleAutomix: () => void;
   automixStatus: AutoMixStatus;
+  masterCueActive: boolean;
+  onToggleMasterCue: () => void;
+  cueDeviceSupported: boolean;
+  onSelectCueDevice: (deviceId: string) => void;
 }) {
   const crossfader = values['master.crossfader'] ?? 0.5;
   const autodj = (values['master.autodj_enable'] ?? 0) > 0;
+
+  const [devices, setDevices] = useState<AudioOutputDevice[]>([]);
+  const [selectedDevice, setSelectedDevice] = useState('');
+  const [loadingDevices, setLoadingDevices] = useState(false);
+
+  async function refreshDevices() {
+    setLoadingDevices(true);
+    try {
+      const list = await listAudioOutputDevices();
+      setDevices(list);
+    } finally {
+      setLoadingDevices(false);
+    }
+  }
+
+  function handleSelect(deviceId: string) {
+    setSelectedDevice(deviceId);
+    onSelectCueDevice(deviceId);
+  }
 
   return (
     <Paper sx={{ p: 2 }}>
@@ -29,18 +58,19 @@ export function MasterPanel({
         </Typography>
 
         <Box display="flex" alignItems="center" gap={1.5} flexWrap="wrap">
-          {/* MASTER CUE: monitoraggio in cuffia del segnale master. Solo visuale: il
-              browser non permette di instradare l'audio su un'uscita cuffie separata
-              senza hardware/API dedicate, quindi qui è un semplice indicatore. */}
+          {/* MASTER CUE: manda anche il mix finale (post-crossfader) al bus cuffie, per confrontarlo col preview dei deck */}
           <Box
+            onClick={onToggleMasterCue}
             sx={{
               px: 1.2,
               py: 0.5,
               borderRadius: 1,
               fontSize: 11,
               fontFamily: 'JetBrains Mono, monospace',
-              border: '1px solid #2b2f37',
-              color: '#8b909c',
+              cursor: 'pointer',
+              border: `1px solid ${masterCueActive ? palette.master : '#2b2f37'}`,
+              background: masterCueActive ? palette.master : 'transparent',
+              color: masterCueActive ? '#111' : '#8b909c',
             }}
           >
             MASTER CUE
@@ -98,7 +128,7 @@ export function MasterPanel({
         </Box>
       </Box>
 
-      <Box display="flex" alignItems="center" gap={1.5} maxWidth={420} mx="auto">
+      <Box display="flex" alignItems="center" gap={1.5} maxWidth={420} mx="auto" mb={2}>
         <Typography variant="caption" sx={{ opacity: 0.6, color: palette.deck1, fontFamily: 'JetBrains Mono, monospace' }}>
           D1
         </Typography>
@@ -115,6 +145,39 @@ export function MasterPanel({
           D2
         </Typography>
         <DotDisplay color={palette.master}>{(crossfader * 100).toFixed(0)}%</DotDisplay>
+      </Box>
+
+      <Box borderTop="1px solid #2b2f37" pt={1.5}>
+        <Typography variant="caption" sx={{ opacity: 0.6, fontFamily: 'JetBrains Mono, monospace', display: 'block', mb: 0.75 }}>
+          🎧 Preview in cuffia
+        </Typography>
+        <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+          <Select
+            size="small"
+            value={selectedDevice}
+            displayEmpty
+            onChange={(e) => handleSelect(e.target.value)}
+            disabled={!cueDeviceSupported}
+            sx={{ minWidth: 220, fontSize: 13 }}
+          >
+            <MenuItem value="">
+              <em>Uscita di sistema (default)</em>
+            </MenuItem>
+            {devices.map((d) => (
+              <MenuItem key={d.deviceId} value={d.deviceId}>
+                {d.label}
+              </MenuItem>
+            ))}
+          </Select>
+          <Button size="small" variant="outlined" onClick={refreshDevices} disabled={loadingDevices || !cueDeviceSupported}>
+            {loadingDevices ? '...' : 'Trova dispositivi'}
+          </Button>
+        </Box>
+        <Typography variant="caption" sx={{ opacity: 0.5, display: 'block', mt: 0.5, maxWidth: 480 }}>
+          {cueDeviceSupported
+            ? 'Attiva la cuffia 🎧 su un deck (o MASTER CUE) per mandare quel segnale sul dispositivo scelto qui, mentre il resto continua sull\'uscita principale.'
+            : "Questo browser non permette di scegliere un'uscita audio separata per il preview (funziona su Chrome/Edge/Opera). Il preview suonerà comunque, ma sulla stessa uscita del master."}
+        </Typography>
       </Box>
     </Paper>
   );

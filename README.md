@@ -164,6 +164,48 @@ verticale (Deck 1, Mixer, Deck 2) a piena larghezza, pensato per essere usato
 anche da telefono.
 
 
+## Coda per deck
+
+Ogni deck può avere più brani in fila, non solo uno:
+
+- Dalla Libreria, "→ D1" / "→ D2" **carica subito** se quel deck è libero
+  (nessuna traccia caricata), altrimenti **accoda** il brano.
+- Quando la traccia in riproduzione finisce da sola, il deck passa
+  automaticamente al brano successivo in coda (se c'è).
+- Il pulsante **SKIP ▶** (visibile solo quando la coda non è vuota) salta
+  subito al prossimo, senza aspettare la fine del brano attuale.
+- Locali e YouTube possono stare nella stessa coda, mischiati liberamente.
+
+## Preview in cuffia (PFL)
+
+Il pulsante cuffia 🎧 su ciascun deck e **MASTER CUE** in Master ora fanno
+qualcosa di vero: mandano quel segnale su un **bus cuffie separato**,
+instradabile su un dispositivo audio diverso da quello del master (es. le tue
+cuffie collegate via USB/jack, mentre il pubblico continua a sentire gli
+altoparlanti).
+
+- In Master, sezione "🎧 Preview in cuffia": premi **"Trova dispositivi"** (il
+  browser chiederà un permesso — serve solo per leggere i nomi dei dispositivi
+  di uscita, non registra nulla) e scegli l'uscita per il preview dal menu a
+  tendina.
+- Attiva la cuffia 🎧 su un deck per sentire quel brano in anteprima (segnale
+  pre-fader: dopo EQ/filtro, prima di volume e crossfader — come il PFL di un
+  mixer vero). **MASTER CUE** manda invece il mix finale (post-crossfader).
+- **Limiti onesti**:
+  - Funziona solo per i **file locali**: l'audio di YouTube non passa dal
+    grafico Web Audio (stesso motivo per cui EQ e filtro non hanno effetto su
+    YouTube), quindi non può essere "spillato" su un'altra uscita.
+  - La scelta del dispositivo di uscita (`setSinkId`) è supportata da
+    **Chrome/Edge/Opera**. Su Safari e Firefox il preview suona comunque, ma
+    sulla stessa uscita del master: non è possibile scegliere un dispositivo
+    diverso da browser.
+  - Se hai delle vere cuffie DJ con un solo ingresso audio dal PC (non due
+    ingressi separati), l'unico modo per sentire davvero "cuffia vs master"
+    su due uscite fisiche diverse è avere due dispositivi audio distinti
+    (es. altoparlanti + cuffie USB collegate insieme).
+
+
+
 ## Mappa MIDI (riassunto)
 
 | Controllo | Canale/Status | Note/CC |

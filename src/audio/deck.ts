@@ -9,6 +9,7 @@ export interface DeckSnapshot {
   playing: boolean;
   currentTime: number;
   duration: number;
+  cueActive: boolean;
 }
 
 // Il fader del tempo del DDJ-200 di default copre ±8% (selezionabile in
@@ -30,6 +31,7 @@ export class Deck {
   private highFilter: BiquadFilterNode;
   private cfxFilter: BiquadFilterNode;
   private volumeGain: GainNode;
+  private cueTap: GainNode;
 
   // --- YouTube ---
   private ytPlayer: any = null;
@@ -40,10 +42,12 @@ export class Deck {
   private title: string | null = null;
   private volumeFader = 1; // posizione 0..1 del fader volume del mixer
   private crossfaderGain = 1; // 0..1, calcolato dal crossfader master
+  private cueActive = false;
 
   private listeners = new Set<() => void>();
+  private endedListeners = new Set<() => void>();
 
-  constructor(id: 1 | 2, ctx: AudioContext, destination: AudioNode) {
+  constructor(id: 1 | 2, ctx: AudioContext, destination: AudioNode, cueBus: AudioNode) {
     this.id = id;
     this.ctx = ctx;
     this.ytContainerId = `yt-deck-${id}`;
@@ -65,12 +69,19 @@ export class Deck {
     this.cfxFilter.type = 'allpass'; // stato neutro/bypass, sovrascritto da setFilter()
 
     this.volumeGain = ctx.createGain();
+    this.cueTap = ctx.createGain();
+    this.cueTap.gain.value = 0; // 0 = non in cuffia, 1 = in ascolto (PFL)
 
     this.lowFilter.connect(this.midFilter);
     this.midFilter.connect(this.highFilter);
     this.highFilter.connect(this.cfxFilter);
     this.cfxFilter.connect(this.volumeGain);
     this.volumeGain.connect(destination);
+
+    // Tap "pre-fader" per il preview in cuffia: prende il segnale dopo EQ/filtro
+    // ma prima del volume/crossfader, come il PFL di un mixer vero.
+    this.cfxFilter.connect(this.cueTap);
+    this.cueTap.connect(cueBus);
   }
 
   getYtContainerId() {
@@ -82,6 +93,18 @@ export class Deck {
     return () => {
       this.listeners.delete(cb);
     };
+  }
+
+  /** Notificato quando il brano finisce da solo (non su pausa/cue manuale): usato per avanzare la coda */
+  onEnded(cb: () => void) {
+    this.endedListeners.add(cb);
+    return () => {
+      this.endedListeners.delete(cb);
+    };
+  }
+
+  private emitEnded() {
+    for (const l of this.endedListeners) l();
   }
 
   private notify() {
@@ -112,7 +135,10 @@ export class Deck {
       el.addEventListener('loadedmetadata', () => this.notify());
       el.addEventListener('play', () => this.notify());
       el.addEventListener('pause', () => this.notify());
-      el.addEventListener('ended', () => this.notify());
+      el.addEventListener('ended', () => {
+        this.notify();
+        this.emitEnded();
+      });
     }
 
     this.audioEl = el;
@@ -142,7 +168,10 @@ export class Deck {
               this.ytPlayer.setVolume(this.volumeFader * this.crossfaderGain * 100);
               resolve();
             },
-            onStateChange: () => this.notify(),
+            onStateChange: (e: any) => {
+              this.notify();
+              if (e?.data === 0) this.emitEnded(); // YT.PlayerState.ENDED
+            },
           },
         });
       });
@@ -256,6 +285,25 @@ export class Deck {
     }
   }
 
+  /**
+   * PFL/preview in cuffia: manda il segnale di questo deck (post EQ/filtro,
+   * pre volume/crossfader) al bus cuffie invece che al master. Funziona solo
+   * per i file locali: l'audio di YouTube non passa dal grafico Web Audio,
+   * quindi non può essere "spillato" verso un'altra uscita.
+   */
+  setCue(active: boolean) {
+    this.cueActive = active;
+    this.cueTap.gain.setTargetAtTime(active ? 1 : 0, this.ctx.currentTime, 0.01);
+  }
+
+  toggleCue() {
+    this.setCue(!this.cueActive);
+  }
+
+  isCueActive() {
+    return this.cueActive;
+  }
+
   /** Chiamato dall'AudioEngine ogni volta che cambia il fader volume o il crossfader */
   setMix(volumeFader: number, crossfaderGain: number) {
     this.volumeFader = volumeFader;
@@ -272,6 +320,7 @@ export class Deck {
       playing: this.isPlaying(),
       currentTime: this.getCurrentTime(),
       duration: this.getDuration(),
+      cueActive: this.cueActive,
     };
   }
 }

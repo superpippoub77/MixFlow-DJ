@@ -290,6 +290,7 @@ export function DeckPanel(props: {
   track: DeckSnapshot;
   ytContainerId: string;
   bpm: number | null;
+  queueCount: number;
   onPlay: () => void;
   onCue: () => void;
   onSeek: (fraction: number) => void;
@@ -297,6 +298,8 @@ export function DeckPanel(props: {
   onFilterChange: (value: number) => void;
   onVolumeChange: (value: number) => void;
   onTempoChange: (value: number) => void;
+  onToggleCue: () => void;
+  onSkipNext: () => void;
 }) {
   const {
     deck,
@@ -308,6 +311,7 @@ export function DeckPanel(props: {
     track,
     ytContainerId,
     bpm,
+    queueCount,
     onPlay,
     onCue,
     onSeek,
@@ -315,6 +319,8 @@ export function DeckPanel(props: {
     onFilterChange,
     onVolumeChange,
     onTempoChange,
+    onToggleCue,
+    onSkipNext,
   } = props;
   const v = (name: string) => values[`${deck}.${name}`] ?? 0;
   const pressed = (name: string) => (values[`${deck}.${name}`] ?? 0) > 0;
@@ -344,6 +350,29 @@ export function DeckPanel(props: {
       </Box>
 
       <NowPlaying track={track} color={color} ytContainerId={ytContainerId} onSeek={onSeek} bpm={bpm} />
+
+      {queueCount > 0 && (
+        <Box display="flex" alignItems="center" justifyContent="space-between" mb={1.5} sx={{ mt: -0.5 }}>
+          <Typography variant="caption" sx={{ opacity: 0.6, fontFamily: 'JetBrains Mono, monospace', fontSize: 10 }}>
+            In coda: {queueCount} {queueCount === 1 ? 'brano' : 'brani'}
+          </Typography>
+          <Box
+            onClick={onSkipNext}
+            sx={{
+              px: 1,
+              py: 0.3,
+              borderRadius: 1,
+              fontSize: 10,
+              fontFamily: 'JetBrains Mono, monospace',
+              border: `1px solid ${color}`,
+              color,
+              cursor: 'pointer',
+            }}
+          >
+            SKIP ▶
+          </Box>
+        </Box>
+      )}
 
       <Box display="flex" gap={2} alignItems="flex-start" flexWrap="wrap" flex={1}>
         {/* Colonna jog + trasporto, come sull'hardware */}
@@ -417,17 +446,18 @@ export function DeckPanel(props: {
           </Box>
 
           <Box
-            onClick={undefined}
+            onClick={onToggleCue}
             sx={{
               width: 30,
               height: 30,
               borderRadius: '50%',
-              border: `1.5px solid ${pressed('headphone_cue') ? color : '#2b2f37'}`,
-              background: pressed('headphone_cue') ? color : '#181b20',
+              border: `1.5px solid ${track.cueActive ? color : '#2b2f37'}`,
+              background: track.cueActive ? color : '#181b20',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: pressed('headphone_cue') ? '#111' : '#8b909c',
+              cursor: 'pointer',
+              color: track.cueActive ? '#111' : '#8b909c',
             }}
           >
             <HeadphonesIcon sx={{ fontSize: 16 }} />
