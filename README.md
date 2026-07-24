@@ -288,6 +288,28 @@ YouTube il BPM non è calcolabile (stesso limite di EQ e Beat Sync).
 
 
 
+## Inizio/fine personalizzati e fade in/out per brano
+
+Nella Libreria, ogni brano (locale o YouTube) ha un pulsante **✂️** che apre un
+editor inline:
+
+- **Inizio (mm:ss)**: quando mandi quel brano su un deck, parte già da lì
+  invece che dall'inizio del file (anche CUE torna a questo punto, non a 0).
+- **Fine (mm:ss)**: quando la riproduzione arriva lì, il deck si comporta
+  come se il brano fosse finito naturalmente — si ferma e, se c'è qualcosa in
+  coda, parte da solo il prossimo (stessa logica dell'automix/coda).
+- **Fade in / Fade out** (checkbox) + **durata fade** in secondi: dissolvenza
+  in ingresso dal punto di inizio e/o in uscita verso il punto di fine.
+
+Le impostazioni sono legate al brano (nome+dimensione per i file locali, ID
+video per YouTube), quindi restano valide se lo ricarichi più volte o lo
+rimetti in coda; si resettano ricaricando la pagina. Implementato in
+`src/audio/deck.ts` (metodo `applyTrim`, gestito con un piccolo timer interno
+che controlla ogni 100ms se sei nella finestra di fade o hai superato il
+punto di fine).
+
+
+
 ## Mappa MIDI (riassunto)
 
 | Controllo | Canale/Status | Note/CC |

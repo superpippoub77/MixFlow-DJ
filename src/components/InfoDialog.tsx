@@ -98,7 +98,14 @@ export function InfoDialog({ open, onClose }: { open: boolean; onClose: () => vo
           nessun ordine, crescente e decrescente — utile per costruire una scaletta che sale/scende di energia.
         </Section>
 
-        <Section title="10. Limiti da conoscere (YouTube)">
+        <Section title="10. Inizio/fine personalizzati e fade">
+          Ogni brano nella Libreria ha un pulsante ✂️ che apre un editor: puoi impostare un <b>inizio</b> diverso da
+          0:00 (anche CUE tornerà lì, non all'inizio del file), una <b>fine</b> anticipata (il deck si ferma e passa da
+          solo al prossimo in coda, come una fine naturale), e attivare <b>fade in/out</b> con la durata che preferisci.
+          Funziona sia sui file locali che su YouTube.
+        </Section>
+
+        <Section title="11. Limiti da conoscere (YouTube)">
           Le tracce YouTube passano dal player ufficiale incorporato, che il browser isola per motivi di
           sicurezza/copyright: niente accesso ai dati audio grezzi. Per questo su YouTube <b>EQ e filtro non hanno
           effetto</b>, il <b>preview in cuffia non è disponibile</b>, il <b>BPM non viene rilevato</b> (niente ordinamento
@@ -107,7 +114,7 @@ export function InfoDialog({ open, onClose }: { open: boolean; onClose: () => vo
           locali restano l'esperienza completa.
         </Section>
 
-        <Section title="11. Controller vs mouse/touch">
+        <Section title="12. Controller vs mouse/touch">
           Tutta l'interfaccia funziona anche senza il DDJ-200 collegato: ogni controllo risponde al mouse/touch. Se poi
           colleghi il controller, i suoi comandi hanno sempre l'ultima parola su quel controllo.
         </Section>

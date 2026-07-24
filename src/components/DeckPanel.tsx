@@ -5,18 +5,12 @@ import PauseIcon from '@mui/icons-material/Pause';
 import HeadphonesIcon from '@mui/icons-material/Headphones';
 import type { DeckSnapshot } from '../audio/deck';
 import { DotDisplay } from './DotDisplay';
+import { formatTime, parseTimeInput } from '../utils/time';
 
 export interface QueueEntry {
   id: string;
   title: string;
   source: 'local' | 'youtube';
-}
-
-function formatTime(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
 function NowPlaying({
@@ -105,14 +99,7 @@ function JumpToTime({ color, onJump }: { color: string; onJump: (seconds: number
   const [value, setValue] = useState('');
 
   function parseAndJump() {
-    const trimmed = value.trim();
-    const match = trimmed.match(/^(\d+):([0-5]?\d)$/);
-    let seconds: number | null = null;
-    if (match) {
-      seconds = parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
-    } else if (/^\d+$/.test(trimmed)) {
-      seconds = parseInt(trimmed, 10);
-    }
+    const seconds = parseTimeInput(value);
     if (seconds != null) onJump(seconds);
   }
 

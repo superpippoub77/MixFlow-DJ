@@ -3,6 +3,16 @@ import { loadYouTubeIframeApi } from '../youtube/loadYouTubeApi';
 export type SourceType = 'local' | 'youtube';
 export type EqBand = 'low' | 'mid' | 'high';
 
+export interface TrimSettings {
+  start: number | null; // secondi: null = dall'inizio del file
+  end: number | null; // secondi: null = fino alla fine del file
+  fadeIn: boolean;
+  fadeOut: boolean;
+  fadeDuration: number; // durata delle dissolvenze, in secondi
+}
+
+export const DEFAULT_TRIM: TrimSettings = { start: null, end: null, fadeIn: false, fadeOut: false, fadeDuration: 3 };
+
 export interface DeckSnapshot {
   sourceType: SourceType | null;
   title: string | null;
@@ -32,6 +42,7 @@ export class Deck {
   private midFilter: BiquadFilterNode;
   private highFilter: BiquadFilterNode;
   private cfxFilter: BiquadFilterNode;
+  private trimFadeGain: GainNode;
   private volumeGain: GainNode;
   private cueTap: GainNode;
 
@@ -46,6 +57,12 @@ export class Deck {
   private crossfaderGain = 1; // 0..1, calcolato dal crossfader master
   private cueActive = false;
   private hotCues: Record<number, number | null> = { 1: null, 2: null, 3: null, 4: null, 5: null, 6: null, 7: null, 8: null };
+  private trimStart: number | null = null;
+  private trimEnd: number | null = null;
+  private fadeInEnabled = false;
+  private fadeOutEnabled = false;
+  private fadeDuration = 3;
+  private trimTimer: ReturnType<typeof setInterval> | null = null;
 
   private listeners = new Set<() => void>();
   private endedListeners = new Set<() => void>();
@@ -72,13 +89,15 @@ export class Deck {
     this.cfxFilter.type = 'allpass'; // stato neutro/bypass, sovrascritto da setFilter()
 
     this.volumeGain = ctx.createGain();
+    this.trimFadeGain = ctx.createGain();
     this.cueTap = ctx.createGain();
     this.cueTap.gain.value = 0; // 0 = non in cuffia, 1 = in ascolto (PFL)
 
     this.lowFilter.connect(this.midFilter);
     this.midFilter.connect(this.highFilter);
     this.highFilter.connect(this.cfxFilter);
-    this.cfxFilter.connect(this.volumeGain);
+    this.cfxFilter.connect(this.trimFadeGain);
+    this.trimFadeGain.connect(this.volumeGain);
     this.volumeGain.connect(destination);
 
     // Tap "pre-fader" per il preview in cuffia: prende il segnale dopo EQ/filtro
@@ -116,7 +135,7 @@ export class Deck {
 
   // --- caricamento sorgenti ---
 
-  loadLocalFile(file: File) {
+  loadLocalFile(file: File, trim: TrimSettings = DEFAULT_TRIM) {
     if (this.ytReady) this.ytPlayer.pauseVideo();
 
     if (this.audioEl) {
@@ -135,7 +154,10 @@ export class Deck {
       node.connect(this.lowFilter);
       this.sourceNode = node;
       el.addEventListener('timeupdate', () => this.notify());
-      el.addEventListener('loadedmetadata', () => this.notify());
+      el.addEventListener('loadedmetadata', () => {
+        this.notify();
+        if (this.trimStart != null) this.seekTo(this.trimStart);
+      });
       el.addEventListener('play', () => this.notify());
       el.addEventListener('pause', () => this.notify());
       el.addEventListener('ended', () => {
@@ -148,14 +170,16 @@ export class Deck {
     this.sourceType = 'local';
     this.title = file.name;
     this.resetHotCues();
+    this.applyTrim(trim);
     this.notify();
   }
 
-  async loadYoutube(videoId: string, title: string) {
+  async loadYoutube(videoId: string, title: string, trim: TrimSettings = DEFAULT_TRIM) {
     this.audioEl?.pause();
     this.sourceType = 'youtube';
     this.title = title;
     this.resetHotCues();
+    this.applyTrim(trim);
     this.notify();
 
     const YT = await loadYouTubeIframeApi();
@@ -171,11 +195,13 @@ export class Deck {
             onReady: () => {
               this.ytReady = true;
               this.ytPlayer.setVolume(this.volumeFader * this.crossfaderGain * 100);
+              if (this.trimStart != null) this.seekTo(this.trimStart);
               resolve();
             },
             onStateChange: (e: any) => {
               this.notify();
               if (e?.data === 0) this.emitEnded(); // YT.PlayerState.ENDED
+              if (e?.data === 5 && this.trimStart != null) this.seekTo(this.trimStart); // CUED: nuovo video pronto
             },
           },
         });
@@ -188,6 +214,9 @@ export class Deck {
   // --- trasporto ---
 
   play() {
+    if (this.trimStart != null && this.getCurrentTime() < this.trimStart - 0.05) {
+      this.seekTo(this.trimStart);
+    }
     if (this.sourceType === 'local') this.audioEl?.play();
     else if (this.sourceType === 'youtube' && this.ytReady) this.ytPlayer.playVideo();
   }
@@ -208,9 +237,9 @@ export class Deck {
     return false;
   }
 
-  /** CUE: torna semplicemente all'inizio del brano (nessun cue-point salvato, per ora) */
+  /** CUE: torna al punto di inizio (personalizzato, se impostato nella libreria) */
   cue() {
-    this.seekTo(0);
+    this.seekTo(this.trimStart ?? 0);
     this.pause();
   }
 
@@ -241,6 +270,51 @@ export class Deck {
     if (this.sourceType === 'local' && this.audioEl) return this.audioEl.playbackRate;
     if (this.sourceType === 'youtube' && this.ytReady) return this.ytPlayer.getPlaybackRate?.() ?? 1;
     return 1;
+  }
+
+  /**
+   * Applica inizio/fine personalizzati e fade in/out per il brano appena
+   * caricato. Avvia un piccolo timer che controlla ogni 100ms se siamo
+   * arrivati al punto di fine (per fermarsi/avanzare la coda, come una fine
+   * naturale) o se siamo in una delle due finestre di dissolvenza.
+   */
+  private applyTrim(trim: TrimSettings) {
+    this.trimStart = trim.start;
+    this.trimEnd = trim.end;
+    this.fadeInEnabled = trim.fadeIn;
+    this.fadeOutEnabled = trim.fadeOut;
+    this.fadeDuration = Math.max(0.5, trim.fadeDuration);
+    this.trimFadeGain.gain.value = this.fadeInEnabled ? 0 : 1;
+
+    if (this.trimTimer != null) clearInterval(this.trimTimer);
+    this.trimTimer = setInterval(() => this.tickTrim(), 100);
+  }
+
+  private tickTrim() {
+    if (this.sourceType == null) return;
+    const t = this.getCurrentTime();
+    const now = this.ctx.currentTime;
+
+    // Fine personalizzata raggiunta: si comporta come una fine naturale (avanza la coda)
+    if (this.trimEnd != null && this.isPlaying() && t >= this.trimEnd) {
+      this.pause();
+      this.emitEnded();
+      return;
+    }
+
+    if (!this.fadeInEnabled && !this.fadeOutEnabled) return; // niente dissolvenze da calcolare
+
+    let gain = 1;
+    const start = this.trimStart ?? 0;
+    if (this.fadeInEnabled) {
+      const elapsed = t - start;
+      if (elapsed < this.fadeDuration) gain = Math.min(gain, Math.max(0, elapsed / this.fadeDuration));
+    }
+    if (this.fadeOutEnabled && this.trimEnd != null) {
+      const remaining = this.trimEnd - t;
+      if (remaining < this.fadeDuration) gain = Math.min(gain, Math.max(0, remaining / this.fadeDuration));
+    }
+    this.trimFadeGain.gain.setTargetAtTime(gain, now, 0.05);
   }
 
   // --- controlli dal mixer ---

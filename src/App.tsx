@@ -14,6 +14,7 @@ import { useAudioEngine } from './audio/useAudioEngine';
 import { useAutoMix } from './audio/useAutoMix';
 import { detectBpm } from './audio/bpmDetect';
 import { MixRecorder } from './audio/recorder';
+import { DEFAULT_TRIM, type TrimSettings } from './audio/deck';
 import { palette } from './theme';
 
 type QueueItem =
@@ -23,6 +24,13 @@ type QueueItem =
 type QueueItemInput =
   | { source: 'local'; file: File; title: string }
   | { source: 'youtube'; videoId: string; title: string };
+
+import { localTrackKey, youtubeTrackKey } from './utils/trackKey';
+
+/** Chiave stabile per associare inizio/fine/fade a un brano, indipendentemente da quante volte viene ricaricato */
+function trackKey(item: QueueItem): string {
+  return item.source === 'local' ? localTrackKey(item.file) : youtubeTrackKey(item.videoId);
+}
 
 function useJogAngles(onEvent: ReturnType<typeof useDDJ200>['onEvent']) {
   const [angles, setAngles] = useState<Record<1 | 2, number>>({ 1: 0, 2: 0 });
@@ -78,6 +86,7 @@ export default function App() {
   const { values, setManual } = useManualOverrides(ddj.onEvent, ddj.values);
   const [bpms, setBpms] = useState<Record<1 | 2, number | null>>({ 1: null, 2: null });
   const [queues, setQueues] = useState<Record<1 | 2, QueueItem[]>>({ 1: [], 2: [] });
+  const [trackSettings, setTrackSettings] = useState<Record<string, TrimSettings>>({});
   const [infoOpen, setInfoOpen] = useState(false);
 
   // --- registrazione del mix ---
@@ -188,12 +197,13 @@ export default function App() {
   // --- caricamento diretto (sostituisce subito quello che sta suonando sul deck) ---
   function loadItem(deck: 1 | 2, item: QueueItem) {
     engine.resume();
+    const trim = trackSettings[trackKey(item)] ?? DEFAULT_TRIM;
     if (item.source === 'local') {
-      engine.decks[deck].loadLocalFile(item.file);
+      engine.decks[deck].loadLocalFile(item.file, trim);
       setBpms((prev) => ({ ...prev, [deck]: null }));
       detectBpm(item.file).then((bpm) => setBpms((prev) => ({ ...prev, [deck]: bpm })));
     } else {
-      engine.decks[deck].loadYoutube(item.videoId, item.title);
+      engine.decks[deck].loadYoutube(item.videoId, item.title, trim);
       setBpms((prev) => ({ ...prev, [deck]: null }));
     }
   }
@@ -205,6 +215,10 @@ export default function App() {
     } else {
       setQueues((prev) => ({ ...prev, [deck]: [...prev[deck], { ...item, id: crypto.randomUUID() } as QueueItem] }));
     }
+  }
+
+  function handleUpdateTrackSettings(key: string, settings: TrimSettings) {
+    setTrackSettings((prev) => ({ ...prev, [key]: settings }));
   }
 
   function handleLoadLocal(deck: 1 | 2, file: File) {
@@ -403,7 +417,12 @@ export default function App() {
         </Box>
 
         <Box mb={2}>
-          <LibraryPanel onLoadLocal={handleLoadLocal} onLoadYoutube={handleLoadYoutube} />
+          <LibraryPanel
+            onLoadLocal={handleLoadLocal}
+            onLoadYoutube={handleLoadYoutube}
+            trackSettings={trackSettings}
+            onUpdateTrackSettings={handleUpdateTrackSettings}
+          />
         </Box>
 
         <EventLog log={ddj.log} />

@@ -3,7 +3,9 @@ import {
   Avatar,
   Box,
   Button,
+  Checkbox,
   CircularProgress,
+  FormControlLabel,
   List,
   ListItemButton,
   ListItemText,
@@ -16,6 +18,9 @@ import {
 import { searchYouTube, type YouTubeSearchResult } from '../youtube/youtubeSearch';
 import { extractPlaylistId, fetchYoutubePlaylist } from '../youtube/youtubePlaylist';
 import { detectBpm } from '../audio/bpmDetect';
+import { DEFAULT_TRIM, type TrimSettings } from '../audio/deck';
+import { localTrackKey, youtubeTrackKey } from '../utils/trackKey';
+import { formatTime, parseTimeInput } from '../utils/time';
 
 interface LocalTrack {
   id: string;
@@ -23,31 +28,119 @@ interface LocalTrack {
   bpm: number | null | 'loading';
 }
 
+/** Editor inline: inizio/fine personalizzati + fade in/out, per un singolo brano */
+function TrimEditor({ settings, onChange }: { settings: TrimSettings; onChange: (s: TrimSettings) => void }) {
+  const [startText, setStartText] = useState(settings.start != null ? formatTime(settings.start) : '');
+  const [endText, setEndText] = useState(settings.end != null ? formatTime(settings.end) : '');
+
+  function commitStart() {
+    onChange({ ...settings, start: parseTimeInput(startText) });
+  }
+  function commitEnd() {
+    onChange({ ...settings, end: parseTimeInput(endText) });
+  }
+
+  return (
+    <Box sx={{ pl: 2, pr: 1, py: 1, background: '#181b20', borderRadius: 1, mb: 0.5 }}>
+      <Box display="flex" gap={2} flexWrap="wrap" alignItems="center" mb={0.5}>
+        <TextField
+          label="Inizio (mm:ss)"
+          size="small"
+          value={startText}
+          onChange={(e) => setStartText(e.target.value)}
+          onBlur={commitStart}
+          onKeyDown={(e) => e.key === 'Enter' && commitStart()}
+          sx={{ width: 130 }}
+          placeholder="0:00"
+        />
+        <TextField
+          label="Fine (mm:ss)"
+          size="small"
+          value={endText}
+          onChange={(e) => setEndText(e.target.value)}
+          onBlur={commitEnd}
+          onKeyDown={(e) => e.key === 'Enter' && commitEnd()}
+          sx={{ width: 130 }}
+          placeholder="fine file"
+        />
+        <TextField
+          label="Fade (sec)"
+          size="small"
+          type="number"
+          value={settings.fadeDuration}
+          onChange={(e) => onChange({ ...settings, fadeDuration: Math.max(0.5, parseFloat(e.target.value) || 3) })}
+          sx={{ width: 100 }}
+          inputProps={{ min: 0.5, step: 0.5 }}
+        />
+      </Box>
+      <Box display="flex" gap={1} flexWrap="wrap">
+        <FormControlLabel
+          control={<Checkbox size="small" checked={settings.fadeIn} onChange={(e) => onChange({ ...settings, fadeIn: e.target.checked })} />}
+          label={<Typography variant="caption">Fade in</Typography>}
+        />
+        <FormControlLabel
+          control={<Checkbox size="small" checked={settings.fadeOut} onChange={(e) => onChange({ ...settings, fadeOut: e.target.checked })} />}
+          label={<Typography variant="caption">Fade out</Typography>}
+        />
+      </Box>
+    </Box>
+  );
+}
+
+function trimSummary(settings: TrimSettings): string | null {
+  if (settings.start == null && settings.end == null && !settings.fadeIn && !settings.fadeOut) return null;
+  const parts: string[] = [];
+  if (settings.start != null || settings.end != null) {
+    parts.push(`${settings.start != null ? formatTime(settings.start) : '0:00'} → ${settings.end != null ? formatTime(settings.end) : 'fine'}`);
+  }
+  if (settings.fadeIn) parts.push('fade in');
+  if (settings.fadeOut) parts.push('fade out');
+  return parts.join(' · ');
+}
+
 function TrackRow(props: {
   title: string;
   subtitle?: string;
   avatar?: string;
+  settingsKey: string;
+  settings: TrimSettings;
+  expanded: boolean;
+  onToggleExpanded: () => void;
+  onChangeSettings: (s: TrimSettings) => void;
   onDeck1: () => void;
   onDeck2: () => void;
 }) {
-  const { title, subtitle, avatar, onDeck1, onDeck2 } = props;
+  const { title, subtitle, avatar, settings, expanded, onToggleExpanded, onChangeSettings, onDeck1, onDeck2 } = props;
+  const summary = trimSummary(settings);
+
   return (
-    <ListItemButton disableRipple sx={{ display: 'flex', alignItems: 'center', gap: 1.5, borderRadius: 1 }}>
-      {avatar && <Avatar variant="rounded" src={avatar} sx={{ width: 40, height: 40, flexShrink: 0 }} />}
-      <ListItemText
-        primary={title}
-        secondary={subtitle}
-        sx={{ flex: 1, minWidth: 0 }}
-        primaryTypographyProps={{ noWrap: true, fontSize: 13 }}
-        secondaryTypographyProps={{ noWrap: true, fontSize: 11, sx: { opacity: 0.6 } }}
-      />
-      <Button size="small" onClick={onDeck1} sx={{ minWidth: 40 }}>
-        → D1
-      </Button>
-      <Button size="small" onClick={onDeck2} sx={{ minWidth: 40 }}>
-        → D2
-      </Button>
-    </ListItemButton>
+    <Box>
+      <ListItemButton disableRipple sx={{ display: 'flex', alignItems: 'center', gap: 1.5, borderRadius: 1 }}>
+        {avatar && <Avatar variant="rounded" src={avatar} sx={{ width: 40, height: 40, flexShrink: 0 }} />}
+        <ListItemText
+          primary={title}
+          secondary={subtitle}
+          sx={{ flex: 1, minWidth: 0 }}
+          primaryTypographyProps={{ noWrap: true, fontSize: 13 }}
+          secondaryTypographyProps={{ noWrap: true, fontSize: 11, sx: { opacity: 0.6 } }}
+        />
+        {summary && (
+          <Typography variant="caption" sx={{ opacity: 0.55, fontSize: 10, mr: 0.5, whiteSpace: 'nowrap' }}>
+            {summary}
+          </Typography>
+        )}
+        <Button size="small" onClick={onToggleExpanded} sx={{ minWidth: 32, fontSize: 14 }}>
+          ✂️
+        </Button>
+        <Button size="small" onClick={onDeck1} sx={{ minWidth: 40 }}>
+          → D1
+        </Button>
+        <Button size="small" onClick={onDeck2} sx={{ minWidth: 40 }}>
+          → D2
+        </Button>
+      </ListItemButton>
+      {expanded && <TrimEditor settings={settings} onChange={onChangeSettings} />}
+    </Box>
   );
 }
 
@@ -60,12 +153,15 @@ function bpmLabel(bpm: LocalTrack['bpm']): string {
 export function LibraryPanel(props: {
   onLoadLocal: (deck: 1 | 2, file: File) => void;
   onLoadYoutube: (deck: 1 | 2, videoId: string, title: string) => void;
+  trackSettings: Record<string, TrimSettings>;
+  onUpdateTrackSettings: (key: string, settings: TrimSettings) => void;
 }) {
-  const { onLoadLocal, onLoadYoutube } = props;
+  const { onLoadLocal, onLoadYoutube, trackSettings, onUpdateTrackSettings } = props;
 
   const [tab, setTab] = useState<'local' | 'youtube'>('local');
   const [localTracks, setLocalTracks] = useState<LocalTrack[]>([]);
   const [bpmSort, setBpmSort] = useState<'none' | 'asc' | 'desc'>('none');
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('mixflowdj_yt_api_key') ?? '');
   const [query, setQuery] = useState('');
@@ -75,6 +171,14 @@ export function LibraryPanel(props: {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
+  function getSettings(key: string): TrimSettings {
+    return trackSettings[key] ?? DEFAULT_TRIM;
+  }
+
+  function toggleExpanded(key: string) {
+    setExpandedKey((prev) => (prev === key ? null : key));
+  }
+
   function handleFiles(fileList: FileList | null) {
     if (!fileList) return;
     const newTracks: LocalTrack[] = Array.from(fileList).map((file) => ({
@@ -83,7 +187,6 @@ export function LibraryPanel(props: {
       bpm: 'loading',
     }));
     setLocalTracks((prev) => [...prev, ...newTracks]);
-    // Analizza il BPM di ogni file in background, senza bloccare la UI
     for (const track of newTracks) {
       detectBpm(track.file).then((bpm) => {
         setLocalTracks((prev) => prev.map((t) => (t.id === track.id ? { ...t, bpm } : t)));
@@ -183,15 +286,23 @@ export function LibraryPanel(props: {
             )}
           </Box>
           <List dense disablePadding>
-            {sortedTracks().map((track) => (
-              <TrackRow
-                key={track.id}
-                title={track.file.name}
-                subtitle={bpmLabel(track.bpm)}
-                onDeck1={() => onLoadLocal(1, track.file)}
-                onDeck2={() => onLoadLocal(2, track.file)}
-              />
-            ))}
+            {sortedTracks().map((track) => {
+              const key = localTrackKey(track.file);
+              return (
+                <TrackRow
+                  key={track.id}
+                  title={track.file.name}
+                  subtitle={bpmLabel(track.bpm)}
+                  settingsKey={key}
+                  settings={getSettings(key)}
+                  expanded={expandedKey === key}
+                  onToggleExpanded={() => toggleExpanded(key)}
+                  onChangeSettings={(s) => onUpdateTrackSettings(key, s)}
+                  onDeck1={() => onLoadLocal(1, track.file)}
+                  onDeck2={() => onLoadLocal(2, track.file)}
+                />
+              );
+            })}
           </List>
           {localTracks.length === 0 && (
             <Typography variant="body2" sx={{ opacity: 0.5 }}>
@@ -255,16 +366,24 @@ export function LibraryPanel(props: {
           )}
 
           <List dense disablePadding>
-            {results.map((r) => (
-              <TrackRow
-                key={r.videoId}
-                title={r.title}
-                subtitle={r.channelTitle}
-                avatar={r.thumbnailUrl}
-                onDeck1={() => onLoadYoutube(1, r.videoId, r.title)}
-                onDeck2={() => onLoadYoutube(2, r.videoId, r.title)}
-              />
-            ))}
+            {results.map((r) => {
+              const key = youtubeTrackKey(r.videoId);
+              return (
+                <TrackRow
+                  key={r.videoId}
+                  title={r.title}
+                  subtitle={r.channelTitle}
+                  avatar={r.thumbnailUrl}
+                  settingsKey={key}
+                  settings={getSettings(key)}
+                  expanded={expandedKey === key}
+                  onToggleExpanded={() => toggleExpanded(key)}
+                  onChangeSettings={(s) => onUpdateTrackSettings(key, s)}
+                  onDeck1={() => onLoadYoutube(1, r.videoId, r.title)}
+                  onDeck2={() => onLoadYoutube(2, r.videoId, r.title)}
+                />
+              );
+            })}
           </List>
 
           {results.length === 0 && !loading && !error && (
@@ -275,7 +394,7 @@ export function LibraryPanel(props: {
 
           <Typography variant="caption" sx={{ opacity: 0.45, display: 'block', mt: 1 }}>
             Il BPM automatico non è disponibile per YouTube (nessun accesso all'audio grezzo), quindi l'ordinamento per
-            BPM riguarda solo i file locali.
+            BPM riguarda solo i file locali. Inizio/fine/fade (✂️) funzionano invece su entrambe le sorgenti.
           </Typography>
         </Box>
       )}
