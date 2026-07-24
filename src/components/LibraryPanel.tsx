@@ -15,6 +15,13 @@ import {
 } from '@mui/material';
 import { searchYouTube, type YouTubeSearchResult } from '../youtube/youtubeSearch';
 import { extractPlaylistId, fetchYoutubePlaylist } from '../youtube/youtubePlaylist';
+import { detectBpm } from '../audio/bpmDetect';
+
+interface LocalTrack {
+  id: string;
+  file: File;
+  bpm: number | null | 'loading';
+}
 
 function TrackRow(props: {
   title: string;
@@ -44,6 +51,12 @@ function TrackRow(props: {
   );
 }
 
+function bpmLabel(bpm: LocalTrack['bpm']): string {
+  if (bpm === 'loading') return 'Analisi BPM…';
+  if (bpm == null) return 'BPM sconosciuto';
+  return `${bpm} BPM`;
+}
+
 export function LibraryPanel(props: {
   onLoadLocal: (deck: 1 | 2, file: File) => void;
   onLoadYoutube: (deck: 1 | 2, videoId: string, title: string) => void;
@@ -51,7 +64,8 @@ export function LibraryPanel(props: {
   const { onLoadLocal, onLoadYoutube } = props;
 
   const [tab, setTab] = useState<'local' | 'youtube'>('local');
-  const [localFiles, setLocalFiles] = useState<File[]>([]);
+  const [localTracks, setLocalTracks] = useState<LocalTrack[]>([]);
+  const [bpmSort, setBpmSort] = useState<'none' | 'asc' | 'desc'>('none');
 
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('mixflowdj_yt_api_key') ?? '');
   const [query, setQuery] = useState('');
@@ -63,7 +77,30 @@ export function LibraryPanel(props: {
 
   function handleFiles(fileList: FileList | null) {
     if (!fileList) return;
-    setLocalFiles((prev) => [...prev, ...Array.from(fileList)]);
+    const newTracks: LocalTrack[] = Array.from(fileList).map((file) => ({
+      id: crypto.randomUUID(),
+      file,
+      bpm: 'loading',
+    }));
+    setLocalTracks((prev) => [...prev, ...newTracks]);
+    // Analizza il BPM di ogni file in background, senza bloccare la UI
+    for (const track of newTracks) {
+      detectBpm(track.file).then((bpm) => {
+        setLocalTracks((prev) => prev.map((t) => (t.id === track.id ? { ...t, bpm } : t)));
+      });
+    }
+  }
+
+  function cycleBpmSort() {
+    setBpmSort((prev) => (prev === 'none' ? 'asc' : prev === 'asc' ? 'desc' : 'none'));
+  }
+
+  function sortedTracks(): LocalTrack[] {
+    if (bpmSort === 'none') return localTracks;
+    const withBpm = localTracks.filter((t) => typeof t.bpm === 'number') as (LocalTrack & { bpm: number })[];
+    const withoutBpm = localTracks.filter((t) => typeof t.bpm !== 'number');
+    withBpm.sort((a, b) => (bpmSort === 'asc' ? a.bpm - b.bpm : b.bpm - a.bpm));
+    return [...withBpm, ...withoutBpm];
   }
 
   function saveApiKey(value: string) {
@@ -122,14 +159,13 @@ export function LibraryPanel(props: {
 
       {tab === 'local' && (
         <Box>
-          <Box display="flex" gap={1} mb={1.5}>
+          <Box display="flex" gap={1} mb={1.5} flexWrap="wrap">
             <Button component="label" variant="outlined" size="small">
               Scegli file audio
               <input hidden type="file" accept="audio/*" multiple onChange={(e) => handleFiles(e.target.files)} />
             </Button>
             <Button component="label" variant="outlined" size="small">
               Carica cartella (playlist)
-              {/* webkitdirectory: attributo non standard ma supportato dai browser desktop, permette di importare un'intera cartella come playlist */}
               <input
                 hidden
                 type="file"
@@ -140,13 +176,24 @@ export function LibraryPanel(props: {
                 onChange={(e) => handleFiles(e.target.files)}
               />
             </Button>
+            {localTracks.length > 1 && (
+              <Button size="small" variant="text" onClick={cycleBpmSort}>
+                Ordina per BPM: {bpmSort === 'none' ? 'off' : bpmSort === 'asc' ? '↑ crescente' : '↓ decrescente'}
+              </Button>
+            )}
           </Box>
           <List dense disablePadding>
-            {localFiles.map((file, i) => (
-              <TrackRow key={`${file.name}-${i}`} title={file.name} onDeck1={() => onLoadLocal(1, file)} onDeck2={() => onLoadLocal(2, file)} />
+            {sortedTracks().map((track) => (
+              <TrackRow
+                key={track.id}
+                title={track.file.name}
+                subtitle={bpmLabel(track.bpm)}
+                onDeck1={() => onLoadLocal(1, track.file)}
+                onDeck2={() => onLoadLocal(2, track.file)}
+              />
             ))}
           </List>
-          {localFiles.length === 0 && (
+          {localTracks.length === 0 && (
             <Typography variant="body2" sx={{ opacity: 0.5 }}>
               Nessun file caricato. Scegli uno o più brani, oppure un'intera cartella da usare come playlist.
             </Typography>
@@ -225,6 +272,11 @@ export function LibraryPanel(props: {
               I risultati della ricerca o della playlist appariranno qui.
             </Typography>
           )}
+
+          <Typography variant="caption" sx={{ opacity: 0.45, display: 'block', mt: 1 }}>
+            Il BPM automatico non è disponibile per YouTube (nessun accesso all'audio grezzo), quindi l'ordinamento per
+            BPM riguarda solo i file locali.
+          </Typography>
         </Box>
       )}
     </Paper>

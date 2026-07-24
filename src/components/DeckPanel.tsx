@@ -1,10 +1,16 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { Box, Paper, Typography, LinearProgress } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import HeadphonesIcon from '@mui/icons-material/Headphones';
 import type { DeckSnapshot } from '../audio/deck';
 import { DotDisplay } from './DotDisplay';
+
+export interface QueueEntry {
+  id: string;
+  title: string;
+  source: 'local' | 'youtube';
+}
 
 function formatTime(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
@@ -27,6 +33,7 @@ function NowPlaying({
   bpm: number | null;
 }) {
   const progress = track.duration > 0 ? (track.currentTime / track.duration) * 100 : 0;
+  const effectiveBpm = bpm ? Math.round(bpm * track.playbackRate) : null;
 
   function handleSeekClick(e: React.MouseEvent<HTMLDivElement>) {
     if (track.duration <= 0) return;
@@ -57,7 +64,7 @@ function NowPlaying({
         <Typography variant="body2" noWrap sx={{ opacity: track.title ? 0.9 : 0.4, flex: 1 }}>
           {track.title ?? 'Nessuna traccia caricata'}
         </Typography>
-        <DotDisplay color={color}>{bpm ? `${bpm} BPM` : '-- BPM'}</DotDisplay>
+        <DotDisplay color={color}>{effectiveBpm ? `${effectiveBpm} BPM` : '-- BPM'}</DotDisplay>
       </Box>
 
       <Box display="flex" alignItems="center" gap={1}>
@@ -88,6 +95,128 @@ function NowPlaying({
             {formatTime(track.currentTime)} / {formatTime(track.duration)}
           </DotDisplay>
         </Box>
+      </Box>
+    </Box>
+  );
+}
+
+/** Campo "vai a" per saltare a un punto preciso senza dover ascoltare tutto il brano */
+function JumpToTime({ color, onJump }: { color: string; onJump: (seconds: number) => void }) {
+  const [value, setValue] = useState('');
+
+  function parseAndJump() {
+    const trimmed = value.trim();
+    const match = trimmed.match(/^(\d+):([0-5]?\d)$/);
+    let seconds: number | null = null;
+    if (match) {
+      seconds = parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+    } else if (/^\d+$/.test(trimmed)) {
+      seconds = parseInt(trimmed, 10);
+    }
+    if (seconds != null) onJump(seconds);
+  }
+
+  return (
+    <Box display="flex" alignItems="center" gap={0.6} mb={1}>
+      <Typography variant="caption" sx={{ opacity: 0.55, fontFamily: 'JetBrains Mono, monospace', fontSize: 9 }}>
+        VAI A
+      </Typography>
+      <input
+        type="text"
+        placeholder="mm:ss"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && parseAndJump()}
+        style={{
+          width: 54,
+          background: '#181b20',
+          border: '1px solid #2b2f37',
+          borderRadius: 4,
+          color: '#e8e9ec',
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: 11,
+          padding: '2px 5px',
+        }}
+      />
+      <Box
+        onClick={parseAndJump}
+        sx={{
+          px: 1,
+          py: 0.3,
+          borderRadius: 1,
+          fontSize: 10,
+          fontFamily: 'JetBrains Mono, monospace',
+          border: `1px solid ${color}`,
+          color,
+          cursor: 'pointer',
+        }}
+      >
+        SALTA
+      </Box>
+    </Box>
+  );
+}
+
+/** Coda del deck: elenco visibile, con skip / rimozione / riordino */
+function QueueList({
+  queue,
+  color,
+  onSkipNext,
+  onRemove,
+  onMove,
+}: {
+  queue: QueueEntry[];
+  color: string;
+  onSkipNext: () => void;
+  onRemove: (id: string) => void;
+  onMove: (id: string, direction: 'up' | 'down') => void;
+}) {
+  if (queue.length === 0) return null;
+  return (
+    <Box mb={1.5} sx={{ mt: -0.5 }}>
+      <Box display="flex" alignItems="center" justifyContent="space-between" mb={0.5}>
+        <Typography variant="caption" sx={{ opacity: 0.6, fontFamily: 'JetBrains Mono, monospace', fontSize: 10 }}>
+          In coda: {queue.length} {queue.length === 1 ? 'brano' : 'brani'}
+        </Typography>
+        <Box
+          onClick={onSkipNext}
+          sx={{
+            px: 1,
+            py: 0.3,
+            borderRadius: 1,
+            fontSize: 10,
+            fontFamily: 'JetBrains Mono, monospace',
+            border: `1px solid ${color}`,
+            color,
+            cursor: 'pointer',
+          }}
+        >
+          SKIP ▶
+        </Box>
+      </Box>
+      <Box display="flex" flexDirection="column" gap={0.4}>
+        {queue.map((item, i) => (
+          <Box key={item.id} display="flex" alignItems="center" gap={0.5}>
+            <Typography variant="caption" noWrap sx={{ flex: 1, opacity: 0.8, fontSize: 11 }}>
+              {i + 1}. {item.title}
+            </Typography>
+            <Box
+              onClick={() => i > 0 && onMove(item.id, 'up')}
+              sx={{ cursor: i === 0 ? 'default' : 'pointer', opacity: i === 0 ? 0.25 : 0.7, px: 0.5, fontSize: 11 }}
+            >
+              ▲
+            </Box>
+            <Box
+              onClick={() => i < queue.length - 1 && onMove(item.id, 'down')}
+              sx={{ cursor: i === queue.length - 1 ? 'default' : 'pointer', opacity: i === queue.length - 1 ? 0.25 : 0.7, px: 0.5, fontSize: 11 }}
+            >
+              ▼
+            </Box>
+            <Box onClick={() => onRemove(item.id)} sx={{ cursor: 'pointer', opacity: 0.7, color: '#ff5470', px: 0.5, fontSize: 13 }}>
+              ×
+            </Box>
+          </Box>
+        ))}
       </Box>
     </Box>
   );
@@ -273,6 +402,7 @@ function RoundButton({
           border: `1.5px solid ${active ? color : '#2b2f37'}`,
           background: active ? color : '#181b20',
           cursor: onClick ? 'pointer' : 'default',
+          opacity: onClick ? 1 : 0.5,
         }}
       />
       <Typography variant="caption" sx={{ opacity: 0.55, fontFamily: 'JetBrains Mono, monospace', fontSize: 8, letterSpacing: '0.06em' }}>
@@ -291,16 +421,21 @@ export function DeckPanel(props: {
   track: DeckSnapshot;
   ytContainerId: string;
   bpm: number | null;
-  queueCount: number;
+  queue: QueueEntry[];
+  syncAvailable: boolean;
   onPlay: () => void;
   onCue: () => void;
   onSeek: (fraction: number) => void;
+  onJumpToTime: (seconds: number) => void;
   onEQChange: (band: 'low' | 'mid' | 'high', value: number) => void;
   onFilterChange: (value: number) => void;
   onVolumeChange: (value: number) => void;
   onTempoChange: (value: number) => void;
   onToggleCue: () => void;
+  onSync: () => void;
   onSkipNext: () => void;
+  onRemoveQueueItem: (id: string) => void;
+  onMoveQueueItem: (id: string, direction: 'up' | 'down') => void;
   onHotCue: (pad: number) => void;
 }) {
   const {
@@ -312,16 +447,21 @@ export function DeckPanel(props: {
     track,
     ytContainerId,
     bpm,
-    queueCount,
+    queue,
+    syncAvailable,
     onPlay,
     onCue,
     onSeek,
+    onJumpToTime,
     onEQChange,
     onFilterChange,
     onVolumeChange,
     onTempoChange,
     onToggleCue,
+    onSync,
     onSkipNext,
+    onRemoveQueueItem,
+    onMoveQueueItem,
     onHotCue,
   } = props;
   const v = (name: string) => values[`${deck}.${name}`] ?? 0;
@@ -335,7 +475,6 @@ export function DeckPanel(props: {
           Deck {deck}
         </Typography>
         <Box
-          onClick={undefined}
           sx={{
             px: 1,
             py: 0.4,
@@ -352,29 +491,8 @@ export function DeckPanel(props: {
       </Box>
 
       <NowPlaying track={track} color={color} ytContainerId={ytContainerId} onSeek={onSeek} bpm={bpm} />
-
-      {queueCount > 0 && (
-        <Box display="flex" alignItems="center" justifyContent="space-between" mb={1.5} sx={{ mt: -0.5 }}>
-          <Typography variant="caption" sx={{ opacity: 0.6, fontFamily: 'JetBrains Mono, monospace', fontSize: 10 }}>
-            In coda: {queueCount} {queueCount === 1 ? 'brano' : 'brani'}
-          </Typography>
-          <Box
-            onClick={onSkipNext}
-            sx={{
-              px: 1,
-              py: 0.3,
-              borderRadius: 1,
-              fontSize: 10,
-              fontFamily: 'JetBrains Mono, monospace',
-              border: `1px solid ${color}`,
-              color,
-              cursor: 'pointer',
-            }}
-          >
-            SKIP ▶
-          </Box>
-        </Box>
-      )}
+      <JumpToTime color={color} onJump={onJumpToTime} />
+      <QueueList queue={queue} color={color} onSkipNext={onSkipNext} onRemove={onRemoveQueueItem} onMove={onMoveQueueItem} />
 
       <Box display="flex" gap={2} alignItems="flex-start" flexWrap="wrap" flex={1}>
         {/* Colonna jog + trasporto, come sull'hardware */}
@@ -404,7 +522,7 @@ export function DeckPanel(props: {
           </Box>
 
           <Box display="flex" gap={1.5}>
-            <RoundButton label="BEAT SYNC" active={pressed('sync')} color={color} size={30} />
+            <RoundButton label="BEAT SYNC" active={pressed('sync')} color={color} size={30} onClick={syncAvailable ? onSync : undefined} />
             <RoundButton label="TEMPO RANGE" active={false} color={color} size={30} />
           </Box>
 

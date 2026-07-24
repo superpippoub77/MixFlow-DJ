@@ -231,6 +231,43 @@ riferimento rapido per chi usa il programma senza aver letto questo README.
 
 
 
+## Beat Sync e "tempo generale"
+
+Il numero BPM mostrato sopra ogni deck è ora il **BPM effettivo** (BPM
+rilevato del brano × velocità di riproduzione attuale), non più il valore
+statico: è il "tempo generale" impostato in quel momento su quel deck.
+
+Il pulsante rotondo **BEAT SYNC** sotto il jog è ora funzionante: regola la
+velocità del deck su cui lo premi per farla combaciare con il BPM effettivo
+dell'altro deck (stessa formula usata dall'Automix per il beatmatching
+automatico). Richiede che il BPM di **entrambi** i brani sia stato rilevato:
+funziona quindi solo tra file locali — su YouTube il pulsante resta
+disattivato (più sbiadito) perché il BPM non è calcolabile (vedi sopra).
+
+## Salto preciso nel brano
+
+Oltre a cliccare sulla barra di avanzamento, sotto il titolo di ogni deck c'è
+un campo **"VAI A mm:ss"**: scrivi un istante (es. `1:30`) e premi "SALTA" (o
+Invio) per portarti lì subito, utile per mixare da un punto preciso senza
+dover ascoltare tutto il brano dall'inizio.
+
+## Coda per deck: visibile e modificabile
+
+La coda di ogni deck ora è visibile per intero sotto il titolo, non solo un
+contatore: ogni brano in coda ha le frecce **▲▼** per riordinarlo e una **×**
+per rimuoverlo, oltre al pulsante **SKIP ▶** per passare subito al prossimo.
+
+## Ordinamento della libreria per BPM
+
+Nella Libreria, tab "File locali", ogni brano caricato viene analizzato in
+background (vedi `bpmDetect.ts`) e mostra il suo BPM stimato sotto il nome.
+Con almeno due file caricati compare il pulsante **"Ordina per BPM"**, che
+alterna tra nessun ordine, crescente e decrescente — utile per costruire una
+scaletta che sale (o scende) di energia. Riguarda solo i file locali: per
+YouTube il BPM non è calcolabile (stesso limite di EQ e Beat Sync).
+
+
+
 ## Mappa MIDI (riassunto)
 
 | Controllo | Canale/Status | Note/CC |

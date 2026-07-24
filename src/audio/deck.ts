@@ -11,6 +11,7 @@ export interface DeckSnapshot {
   duration: number;
   cueActive: boolean;
   hotCues: Record<number, boolean>;
+  playbackRate: number;
 }
 
 // Il fader del tempo del DDJ-200 di default copre ±8% (selezionabile in
@@ -235,6 +236,13 @@ export class Deck {
     return 0;
   }
 
+  /** Velocità di riproduzione attuale (1 = normale): usata per calcolare il BPM effettivo e per il Beat Sync */
+  getPlaybackRate(): number {
+    if (this.sourceType === 'local' && this.audioEl) return this.audioEl.playbackRate;
+    if (this.sourceType === 'youtube' && this.ytReady) return this.ytPlayer.getPlaybackRate?.() ?? 1;
+    return 1;
+  }
+
   // --- controlli dal mixer ---
 
   /** EQ reale via BiquadFilter: disponibile solo per i brani locali (YouTube non espone l'audio grezzo) */
@@ -354,6 +362,7 @@ export class Deck {
       duration: this.getDuration(),
       cueActive: this.cueActive,
       hotCues,
+      playbackRate: this.getPlaybackRate(),
     };
   }
 }

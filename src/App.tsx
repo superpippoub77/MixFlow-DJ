@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Box, Container, Paper, Typography, Alert } from '@mui/material';
 import { StatusBar } from './components/StatusBar';
-import { DeckPanel } from './components/DeckPanel';
+import { DeckPanel, type QueueEntry } from './components/DeckPanel';
 import { MasterPanel } from './components/MasterPanel';
 import { EventLog } from './components/EventLog';
 import { LibraryPanel } from './components/LibraryPanel';
@@ -15,7 +15,13 @@ import { detectBpm } from './audio/bpmDetect';
 import { MixRecorder } from './audio/recorder';
 import { palette } from './theme';
 
-type QueueItem = { source: 'local'; file: File; title: string } | { source: 'youtube'; videoId: string; title: string };
+type QueueItem =
+  | { id: string; source: 'local'; file: File; title: string }
+  | { id: string; source: 'youtube'; videoId: string; title: string };
+
+type QueueItemInput =
+  | { source: 'local'; file: File; title: string }
+  | { source: 'youtube'; videoId: string; title: string };
 
 function useJogAngles(onEvent: ReturnType<typeof useDDJ200>['onEvent']) {
   const [angles, setAngles] = useState<Record<1 | 2, number>>({ 1: 0, 2: 0 });
@@ -134,6 +140,18 @@ export default function App() {
     const duration = engine.decks[deck].getDuration();
     if (duration > 0) engine.decks[deck].seekTo(fraction * duration);
   }
+  function handleJumpToTime(deck: 1 | 2, seconds: number) {
+    engine.decks[deck].seekTo(seconds);
+  }
+  function handleSync(deck: 1 | 2) {
+    const other = deck === 1 ? 2 : 1;
+    const myBpm = bpms[deck];
+    const otherBpm = bpms[other];
+    if (!myBpm || !otherBpm) return; // servono entrambi i BPM per sincronizzare
+    const otherRate = engine.decks[other].getPlaybackRate();
+    const newRate = (otherBpm * otherRate) / myBpm;
+    engine.decks[deck].setPlaybackRateAbsolute(newRate);
+  }
   function handleEQChange(deck: 1 | 2, band: 'low' | 'mid' | 'high', value: number) {
     engine.decks[deck].setEQ(band, value);
     setManual(`${deck}.eq_${band}`, value);
@@ -180,11 +198,11 @@ export default function App() {
   }
 
   // --- dalla Libreria: se il deck è libero carica subito, altrimenti accoda ---
-  function enqueue(deck: 1 | 2, item: QueueItem) {
+  function enqueue(deck: 1 | 2, item: QueueItemInput) {
     if (!snapshots[deck].title) {
-      loadItem(deck, item);
+      loadItem(deck, { ...item, id: crypto.randomUUID() } as QueueItem);
     } else {
-      setQueues((prev) => ({ ...prev, [deck]: [...prev[deck], item] }));
+      setQueues((prev) => ({ ...prev, [deck]: [...prev[deck], { ...item, id: crypto.randomUUID() } as QueueItem] }));
     }
   }
 
@@ -200,6 +218,22 @@ export default function App() {
       const [next, ...rest] = prev[deck];
       if (next) loadItem(deck, next);
       return { ...prev, [deck]: rest };
+    });
+  }
+
+  function handleRemoveFromQueue(deck: 1 | 2, id: string) {
+    setQueues((prev) => ({ ...prev, [deck]: prev[deck].filter((item) => item.id !== id) }));
+  }
+
+  function handleMoveQueueItem(deck: 1 | 2, id: string, direction: 'up' | 'down') {
+    setQueues((prev) => {
+      const list = [...prev[deck]];
+      const idx = list.findIndex((item) => item.id === id);
+      if (idx === -1) return prev;
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (swapIdx < 0 || swapIdx >= list.length) return prev;
+      [list[idx], list[swapIdx]] = [list[swapIdx], list[idx]];
+      return { ...prev, [deck]: list };
     });
   }
 
@@ -254,16 +288,21 @@ export default function App() {
               track={snapshots[1]}
               ytContainerId={engine.decks[1].getYtContainerId()}
               bpm={bpms[1]}
-              queueCount={queues[1].length}
+              queue={queues[1].map(({ id, title, source }): QueueEntry => ({ id, title, source }))}
+              syncAvailable={!!bpms[1] && !!bpms[2]}
               onPlay={() => handlePlay(1)}
               onCue={() => handleCue(1)}
               onSeek={(fraction) => handleSeek(1, fraction)}
+              onJumpToTime={(seconds) => handleJumpToTime(1, seconds)}
               onEQChange={(band, val) => handleEQChange(1, band, val)}
               onFilterChange={(val) => handleFilterChange(1, val)}
               onVolumeChange={(val) => handleVolumeChange(1, val)}
               onTempoChange={(val) => handleTempoChange(1, val)}
               onToggleCue={() => handleToggleCue(1)}
+              onSync={() => handleSync(1)}
               onSkipNext={() => advanceQueue(1)}
+              onRemoveQueueItem={(id) => handleRemoveFromQueue(1, id)}
+              onMoveQueueItem={(id, dir) => handleMoveQueueItem(1, id, dir)}
               onHotCue={(pad) => handleHotCue(1, pad)}
             />
           </Box>
@@ -292,16 +331,21 @@ export default function App() {
               track={snapshots[2]}
               ytContainerId={engine.decks[2].getYtContainerId()}
               bpm={bpms[2]}
-              queueCount={queues[2].length}
+              queue={queues[2].map(({ id, title, source }): QueueEntry => ({ id, title, source }))}
+              syncAvailable={!!bpms[1] && !!bpms[2]}
               onPlay={() => handlePlay(2)}
               onCue={() => handleCue(2)}
               onSeek={(fraction) => handleSeek(2, fraction)}
+              onJumpToTime={(seconds) => handleJumpToTime(2, seconds)}
               onEQChange={(band, val) => handleEQChange(2, band, val)}
               onFilterChange={(val) => handleFilterChange(2, val)}
               onVolumeChange={(val) => handleVolumeChange(2, val)}
               onTempoChange={(val) => handleTempoChange(2, val)}
               onToggleCue={() => handleToggleCue(2)}
+              onSync={() => handleSync(2)}
               onSkipNext={() => advanceQueue(2)}
+              onRemoveQueueItem={(id) => handleRemoveFromQueue(2, id)}
+              onMoveQueueItem={(id, dir) => handleMoveQueueItem(2, id, dir)}
               onHotCue={(pad) => handleHotCue(2, pad)}
             />
           </Box>
