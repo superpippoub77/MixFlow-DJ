@@ -444,6 +444,7 @@ export function DeckPanel(props: {
   onVolumeChange: (value: number) => void;
   onTempoChange: (value: number) => void;
   onToggleCue: () => void;
+  onToggleShift: () => void;
   onSync: () => void;
   onSkipNext: () => void;
   onRemoveQueueItem: (id: string) => void;
@@ -471,6 +472,7 @@ export function DeckPanel(props: {
     onVolumeChange,
     onTempoChange,
     onToggleCue,
+    onToggleShift,
     onSync,
     onSkipNext,
     onRemoveQueueItem,
@@ -481,6 +483,8 @@ export function DeckPanel(props: {
   const v = (name: string) => values[`${deck}.${name}`] ?? 0;
   const pressed = (name: string) => (values[`${deck}.${name}`] ?? 0) > 0;
   const filterValue = values[`master.filter_deck${deck}`] ?? 0.5;
+  const [jogPressed, setJogPressed] = useState(false);
+  const [cuePressed, setCuePressed] = useState(false);
 
   return (
     <Paper sx={{ p: 2, flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
@@ -489,12 +493,14 @@ export function DeckPanel(props: {
           Deck {deck}
         </Typography>
         <Box
+          onClick={onToggleShift}
           sx={{
             px: 1,
             py: 0.4,
             borderRadius: 1,
             fontSize: 10,
             fontFamily: 'JetBrains Mono, monospace',
+            cursor: 'pointer',
             border: `1px solid ${pressed('shift') ? color : '#2b2f37'}`,
             background: pressed('shift') ? color : 'transparent',
             color: pressed('shift') ? '#111' : '#8b909c',
@@ -519,13 +525,19 @@ export function DeckPanel(props: {
         {/* Colonna jog + trasporto, come sull'hardware */}
         <Box display="flex" flexDirection="column" alignItems="center" gap={1} flexShrink={0}>
           <Box
+            onPointerDown={() => setJogPressed(true)}
+            onPointerUp={() => setJogPressed(false)}
+            onPointerLeave={() => setJogPressed(false)}
             sx={{
               width: 108,
               height: 108,
               borderRadius: '50%',
-              border: `2px solid ${jogTouched ? color : '#2b2f37'}`,
+              border: `2px solid ${jogTouched || jogPressed ? color : '#2b2f37'}`,
               position: 'relative',
               background: '#181b20',
+              cursor: 'pointer',
+              touchAction: 'none',
+              userSelect: 'none',
             }}
           >
             <Box
@@ -535,9 +547,11 @@ export function DeckPanel(props: {
                 left: '50%',
                 width: 3,
                 height: 42,
+                marginLeft: '-1.5px',
+                marginTop: '-42px',
                 background: color,
-                transformOrigin: '1.5px 0px',
-                transform: `translate(-1.5px, -42px) rotate(${jogAngle}deg)`,
+                transformOrigin: '1.5px 42px',
+                transform: `rotate(${jogAngle}deg)`,
               }}
             />
           </Box>
@@ -550,19 +564,22 @@ export function DeckPanel(props: {
           <Box display="flex" gap={1}>
             <Box
               onClick={onCue}
+              onPointerDown={() => setCuePressed(true)}
+              onPointerUp={() => setCuePressed(false)}
+              onPointerLeave={() => setCuePressed(false)}
               sx={{
                 width: 46,
                 height: 46,
                 borderRadius: '50%',
-                border: `2px solid ${pressed('cue') ? color : '#2b2f37'}`,
-                background: pressed('cue') ? color : '#181b20',
+                border: `2px solid ${pressed('cue') || cuePressed ? color : '#2b2f37'}`,
+                background: pressed('cue') || cuePressed ? color : '#181b20',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
                 fontSize: 10,
                 fontFamily: 'JetBrains Mono, monospace',
-                color: pressed('cue') ? '#111' : '#8b909c',
+                color: pressed('cue') || cuePressed ? '#111' : '#8b909c',
               }}
             >
               CUE

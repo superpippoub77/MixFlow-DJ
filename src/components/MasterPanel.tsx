@@ -1,11 +1,9 @@
 import { useState } from 'react';
-import { Box, Paper, Typography, Slider, Select, MenuItem, Button } from '@mui/material';
+import { Box, Paper, Typography, Select, MenuItem, Button } from '@mui/material';
 import { palette } from '../theme';
 import { DotDisplay } from './DotDisplay';
 import type { AutoMixStatus } from '../audio/useAutoMix';
 import { listAudioOutputDevices, type AudioOutputDevice } from '../audio/audioDevices';
-
-const CROSSFADER_MARKS = Array.from({ length: 11 }, (_, i) => ({ value: i * 10 }));
 
 export function MasterPanel({
   values,
@@ -133,12 +131,14 @@ export function MasterPanel({
           D1
         </Typography>
         <Box flex={1}>
-          <Slider
-            value={crossfader * 100}
-            onChange={(_, val) => onCrossfaderChange((val as number) / 100)}
-            marks={CROSSFADER_MARKS}
-            size="small"
-            sx={{ color: palette.master }}
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.005}
+            value={crossfader}
+            onChange={(e) => onCrossfaderChange(parseFloat(e.target.value))}
+            style={{ width: '100%', accentColor: palette.master, cursor: 'pointer' }}
           />
         </Box>
         <Typography variant="caption" sx={{ opacity: 0.6, color: palette.deck2, fontFamily: 'JetBrains Mono, monospace' }}>

@@ -182,6 +182,9 @@ export default function App() {
     engine.resume();
     engine.decks[deck].toggleCue();
   }
+  function handleToggleShift(deck: 1 | 2) {
+    setManual(`${deck}.shift`, (values[`${deck}.shift`] ?? 0) > 0 ? 0 : 1);
+  }
   function handleToggleMasterCue() {
     engine.resume();
     engine.setMasterCue(!engine.isMasterCueActive());
@@ -326,6 +329,7 @@ export default function App() {
               onVolumeChange={(val) => handleVolumeChange(1, val)}
               onTempoChange={(val) => handleTempoChange(1, val)}
               onToggleCue={() => handleToggleCue(1)}
+              onToggleShift={() => handleToggleShift(1)}
               onSync={() => handleSync(1)}
               onSkipNext={() => advanceQueue(1)}
               onRemoveQueueItem={(id) => handleRemoveFromQueue(1, id)}
@@ -370,6 +374,7 @@ export default function App() {
               onVolumeChange={(val) => handleVolumeChange(2, val)}
               onTempoChange={(val) => handleTempoChange(2, val)}
               onToggleCue={() => handleToggleCue(2)}
+              onToggleShift={() => handleToggleShift(2)}
               onSync={() => handleSync(2)}
               onSkipNext={() => advanceQueue(2)}
               onRemoveQueueItem={(id) => handleRemoveFromQueue(2, id)}
