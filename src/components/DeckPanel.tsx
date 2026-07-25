@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Box, Paper, Typography, LinearProgress } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
@@ -234,7 +234,7 @@ function QueueList({
   );
 }
 
-function Knob({ label, value, color, onChange }: { label: string; value: number; color: string; onChange: (v: number) => void }) {
+function Knob({ label, value, color, onChange, id }: { label: string; value: number; color: string; onChange: (v: number) => void; id?: string }) {
   const angle = -135 + value * 270; // -135°..+135°
   const dragRef = useRef<{ startY: number; startValue: number } | null>(null);
 
@@ -254,6 +254,7 @@ function Knob({ label, value, color, onChange }: { label: string; value: number;
   return (
     <Box display="flex" flexDirection="column" alignItems="center" gap={0.4} width={52}>
       <Box
+        id={id}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -334,7 +335,7 @@ function VerticalTempoFader({ value, color, onChange }: { value: number; color: 
   );
 }
 
-function Fader({ label, value, color, onChange }: { label: string; value: number; color: string; onChange: (v: number) => void }) {
+function Fader({ label, value, color, onChange, id }: { label: string; value: number; color: string; onChange: (v: number) => void; id?: string }) {
   return (
     <Box display="flex" flexDirection="column" alignItems="center" gap={0.5} width={72}>
       <Box display="flex" alignItems="center" gap={0.5}>
@@ -344,6 +345,7 @@ function Fader({ label, value, color, onChange }: { label: string; value: number
         <DotDisplay color={color}>{(value * 100).toFixed(0)}%</DotDisplay>
       </Box>
       <input
+        id={id}
         type="range"
         min={0}
         max={1}
@@ -356,34 +358,47 @@ function Fader({ label, value, color, onChange }: { label: string; value: number
   );
 }
 
-function PadGrid({ active, color, onPad }: { active: Record<number, boolean>; color: string; onPad: (pad: number) => void }) {
+function PadGrid({ active, color, onPad, padOneId }: { active: Record<number, boolean>; color: string; onPad: (pad: number) => void; padOneId?: string }) {
+  const [flashingPad, setFlashingPad] = useState<number | null>(null);
+
+  function handlePadClick(pad: number) {
+    onPad(pad);
+    setFlashingPad(pad);
+    window.setTimeout(() => setFlashingPad((current) => (current === pad ? null : current)), 150);
+  }
+
   return (
     <Box>
       <Typography variant="caption" sx={{ opacity: 0.5, fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.1em', mb: 0.5, display: 'block' }}>
         PERFORMANCE PADS
       </Typography>
       <Box display="grid" gridTemplateColumns="repeat(4, 1fr)" gap={0.75}>
-        {[1, 2, 3, 4, 5, 6, 7, 8].map((pad) => (
-          <Box
-            key={pad}
-            onClick={() => onPad(pad)}
-            sx={{
-              height: 32,
-              borderRadius: 1,
-              border: `1px solid ${active[pad] ? color : '#2b2f37'}`,
-              background: active[pad] ? color : '#181b20',
-              transition: 'background 60ms, border-color 60ms',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-            }}
-          >
-            <Typography variant="caption" sx={{ fontSize: 10, opacity: active[pad] ? 1 : 0.4, color: active[pad] ? '#111' : undefined }}>
-              {pad}
-            </Typography>
-          </Box>
-        ))}
+        {[1, 2, 3, 4, 5, 6, 7, 8].map((pad) => {
+          const isSet = active[pad];
+          const isFlashing = flashingPad === pad;
+          return (
+            <Box
+              key={pad}
+              id={pad === 1 ? padOneId : undefined}
+              onClick={() => handlePadClick(pad)}
+              sx={{
+                height: 32,
+                borderRadius: 1,
+                border: `1px solid ${isSet ? color : '#2b2f37'}`,
+                background: isFlashing ? '#ffffff' : isSet ? color : '#181b20',
+                transition: 'background 60ms, border-color 60ms',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+              }}
+            >
+              <Typography variant="caption" sx={{ fontSize: 10, opacity: isSet || isFlashing ? 1 : 0.4, color: isSet || isFlashing ? '#111' : undefined }}>
+                {pad}
+              </Typography>
+            </Box>
+          );
+        })}
       </Box>
     </Box>
   );
@@ -396,16 +411,19 @@ function RoundButton({
   color,
   onClick,
   size = 40,
+  id,
 }: {
   label: string;
   active: boolean;
   color: string;
   onClick?: () => void;
   size?: number;
+  id?: string;
 }) {
   return (
     <Box display="flex" flexDirection="column" alignItems="center" gap={0.4}>
       <Box
+        id={id}
         onClick={onClick}
         sx={{
           width: size,
@@ -480,11 +498,40 @@ export function DeckPanel(props: {
     onReorderQueueDrop,
     onHotCue,
   } = props;
-  const v = (name: string) => values[`${deck}.${name}`] ?? 0;
+  const v = (name: string) => {
+    if (values[`${deck}.${name}`] != null) return values[`${deck}.${name}`];
+    // Valori di default sensati finché il controllo reale non viene letto
+    // (dal SysEx di stato iniziale o al primo tocco): centro per EQ/tempo,
+    // pieno per il volume — mai 0, che per EQ/tempo significherebbe un
+    // estremo (taglio totale / pitch al minimo), non una posizione neutra.
+    if (name === 'eq_low' || name === 'eq_mid' || name === 'eq_high' || name === 'tempo') return 0.5;
+    if (name === 'volume') return 1;
+    return 0;
+  };
   const pressed = (name: string) => (values[`${deck}.${name}`] ?? 0) > 0;
   const filterValue = values[`master.filter_deck${deck}`] ?? 0.5;
   const [jogPressed, setJogPressed] = useState(false);
   const [cuePressed, setCuePressed] = useState(false);
+  const [playFlash, setPlayFlash] = useState(false);
+
+  // Il controller fisico a volte manda "premuto"+"rilasciato" in pochi millisecondi
+  // (troppo veloce perché l'occhio lo veda): questi effetti garantiscono un lampo
+  // visibile di almeno 180ms ogni volta che arriva una pressione reale da MIDI.
+  const cueRaw = (values[`${deck}.cue`] ?? 0) > 0;
+  useEffect(() => {
+    if (!cueRaw) return;
+    setCuePressed(true);
+    const timer = window.setTimeout(() => setCuePressed(false), 180);
+    return () => window.clearTimeout(timer);
+  }, [cueRaw]);
+
+  const playRaw = (values[`${deck}.play`] ?? 0) > 0;
+  useEffect(() => {
+    if (!playRaw) return;
+    setPlayFlash(true);
+    const timer = window.setTimeout(() => setPlayFlash(false), 180);
+    return () => window.clearTimeout(timer);
+  }, [playRaw]);
 
   return (
     <Paper sx={{ p: 2, flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
@@ -557,16 +604,25 @@ export function DeckPanel(props: {
           </Box>
 
           <Box display="flex" gap={1.5}>
-            <RoundButton label="BEAT SYNC" active={pressed('sync')} color={color} size={30} onClick={syncAvailable ? onSync : undefined} />
+            <RoundButton
+              id={deck === 1 ? 'tid-deck1-sync' : undefined}
+              label="BEAT SYNC"
+              active={pressed('sync')}
+              color={color}
+              size={30}
+              onClick={syncAvailable ? onSync : undefined}
+            />
             <RoundButton label="TEMPO RANGE" active={false} color={color} size={30} />
           </Box>
 
           <Box display="flex" gap={1}>
             <Box
-              onClick={onCue}
-              onPointerDown={() => setCuePressed(true)}
-              onPointerUp={() => setCuePressed(false)}
-              onPointerLeave={() => setCuePressed(false)}
+              id={deck === 1 ? 'tid-deck1-cue' : undefined}
+              onClick={() => {
+                onCue();
+                setCuePressed(true);
+                window.setTimeout(() => setCuePressed(false), 180);
+              }}
               sx={{
                 width: 46,
                 height: 46,
@@ -580,23 +636,25 @@ export function DeckPanel(props: {
                 fontSize: 10,
                 fontFamily: 'JetBrains Mono, monospace',
                 color: pressed('cue') || cuePressed ? '#111' : '#8b909c',
+                transition: 'background 60ms, border-color 60ms',
               }}
             >
               CUE
             </Box>
             <Box
+              id={deck === 1 ? 'tid-deck1-play' : undefined}
               onClick={onPlay}
               sx={{
                 width: 46,
                 height: 46,
                 borderRadius: '50%',
-                border: `2px solid ${track.playing ? color : '#2b2f37'}`,
-                background: track.playing ? color : '#181b20',
+                border: `2px solid ${track.playing || playFlash ? color : '#2b2f37'}`,
+                background: track.playing || playFlash ? color : '#181b20',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
-                color: track.playing ? '#111' : color,
+                color: track.playing || playFlash ? '#111' : color,
               }}
             >
               {track.playing ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" />}
@@ -624,10 +682,10 @@ export function DeckPanel(props: {
 
         {/* Colonna filtro + EQ, come sul mixer reale */}
         <Box display="flex" flexDirection="column" alignItems="center" gap={1.5} flexShrink={0}>
-          <Knob label="FILTER" value={filterValue} color={color} onChange={onFilterChange} />
+          <Knob id={deck === 1 ? 'tid-deck1-filter' : undefined} label="FILTER" value={filterValue} color={color} onChange={onFilterChange} />
           <Knob label="HIGH" value={v('eq_high')} color={color} onChange={(val) => onEQChange('high', val)} />
           <Knob label="MID" value={v('eq_mid')} color={color} onChange={(val) => onEQChange('mid', val)} />
-          <Knob label="LOW" value={v('eq_low')} color={color} onChange={(val) => onEQChange('low', val)} />
+          <Knob id={deck === 1 ? 'tid-deck1-eq-low' : undefined} label="LOW" value={v('eq_low')} color={color} onChange={(val) => onEQChange('low', val)} />
         </Box>
 
         {/* Tempo verticale */}
@@ -637,8 +695,8 @@ export function DeckPanel(props: {
 
         {/* Volume + pad, occupano lo spazio restante */}
         <Box flex={1} minWidth={180} display="flex" flexDirection="column" gap={1.5}>
-          <Fader label="VOLUME" value={v('volume')} color={color} onChange={onVolumeChange} />
-          <PadGrid active={track.hotCues} color={color} onPad={onHotCue} />
+          <Fader id={deck === 1 ? 'tid-deck1-volume' : undefined} label="VOLUME" value={v('volume')} color={color} onChange={onVolumeChange} />
+          <PadGrid active={track.hotCues} color={color} onPad={onHotCue} padOneId={deck === 1 ? 'tid-deck1-pad1' : undefined} />
         </Box>
       </Box>
     </Paper>

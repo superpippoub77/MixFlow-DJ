@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Avatar,
   Box,
@@ -21,6 +21,7 @@ import { detectBpm } from '../audio/bpmDetect';
 import { DEFAULT_TRIM, type TrimSettings } from '../audio/deck';
 import { localTrackKey, youtubeTrackKey } from '../utils/trackKey';
 import { formatTime, parseTimeInput } from '../utils/time';
+import { loadAllLocalTracks, removeLocalTrack, saveLocalTrack } from '../utils/localLibraryDB';
 
 interface LocalTrack {
   id: string;
@@ -109,8 +110,9 @@ function TrackRow(props: {
   onChangeSettings: (s: TrimSettings) => void;
   onDeck1: () => void;
   onDeck2: () => void;
+  onRemove?: () => void;
 }) {
-  const { title, subtitle, avatar, settings, expanded, onToggleExpanded, onChangeSettings, onDeck1, onDeck2 } = props;
+  const { title, subtitle, avatar, settings, expanded, onToggleExpanded, onChangeSettings, onDeck1, onDeck2, onRemove } = props;
   const summary = trimSummary(settings);
 
   return (
@@ -138,6 +140,11 @@ function TrackRow(props: {
         <Button size="small" onClick={onDeck2} sx={{ minWidth: 40 }}>
           → D2
         </Button>
+        {onRemove && (
+          <Button size="small" onClick={onRemove} sx={{ minWidth: 28, color: '#ff5470' }}>
+            ×
+          </Button>
+        )}
       </ListItemButton>
       {expanded && <TrimEditor settings={settings} onChange={onChangeSettings} />}
     </Box>
@@ -179,6 +186,35 @@ export function LibraryPanel(props: {
     setExpandedKey((prev) => (prev === key ? null : key));
   }
 
+  // Ricarica dall'IndexedDB i file locali salvati nelle sessioni precedenti
+  useEffect(() => {
+    loadAllLocalTracks().then((files) => {
+      if (files.length === 0) return;
+      const restored: LocalTrack[] = files.map(({ id, file }) => ({ id, file, bpm: 'loading' }));
+      setLocalTracks(restored);
+      for (const t of restored) {
+        detectBpm(t.file).then((bpm) => setLocalTracks((prev) => prev.map((x) => (x.id === t.id ? { ...x, bpm } : x))));
+      }
+    });
+  }, []);
+
+  // Ricarica gli ultimi risultati/playlist YouTube (solo metadati, nessun file da salvare)
+  useEffect(() => {
+    const saved = localStorage.getItem('mixflowdj_yt_results');
+    if (!saved) return;
+    try {
+      const parsed = JSON.parse(saved) as { results: YouTubeSearchResult[]; label: string | null };
+      setResults(parsed.results ?? []);
+      setResultsLabel(parsed.label ?? null);
+    } catch {
+      // dati salvati non validi: ignora
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('mixflowdj_yt_results', JSON.stringify({ results, label: resultsLabel }));
+  }, [results, resultsLabel]);
+
   function handleFiles(fileList: FileList | null) {
     if (!fileList) return;
     const newTracks: LocalTrack[] = Array.from(fileList).map((file) => ({
@@ -188,10 +224,18 @@ export function LibraryPanel(props: {
     }));
     setLocalTracks((prev) => [...prev, ...newTracks]);
     for (const track of newTracks) {
+      saveLocalTrack(track.id, track.file).catch(() => {
+        // salvataggio persistente fallito (es. quota IndexedDB piena): il brano resta comunque usabile in questa sessione
+      });
       detectBpm(track.file).then((bpm) => {
         setLocalTracks((prev) => prev.map((t) => (t.id === track.id ? { ...t, bpm } : t)));
       });
     }
+  }
+
+  function handleRemoveLocalTrack(id: string) {
+    setLocalTracks((prev) => prev.filter((t) => t.id !== id));
+    removeLocalTrack(id).catch(() => {});
   }
 
   function cycleBpmSort() {
@@ -263,7 +307,7 @@ export function LibraryPanel(props: {
       {tab === 'local' && (
         <Box>
           <Box display="flex" gap={1} mb={1.5} flexWrap="wrap">
-            <Button component="label" variant="outlined" size="small">
+            <Button id="tid-library" component="label" variant="outlined" size="small">
               Scegli file audio
               <input hidden type="file" accept="audio/*" multiple onChange={(e) => handleFiles(e.target.files)} />
             </Button>
@@ -300,6 +344,7 @@ export function LibraryPanel(props: {
                   onChangeSettings={(s) => onUpdateTrackSettings(key, s)}
                   onDeck1={() => onLoadLocal(1, track.file)}
                   onDeck2={() => onLoadLocal(2, track.file)}
+                  onRemove={() => handleRemoveLocalTrack(track.id)}
                 />
               );
             })}

@@ -54,8 +54,11 @@ export function useAudioEngine(onEvent: (cb: (e: DDJ200Event) => void) => () => 
       if (event.kind === 'button' && event.control === 'cue' && event.pressed) {
         engine.decks[deck].cue();
       }
-      if (event.kind === 'button' && event.control === 'headphone_cue' && event.pressed) {
-        engine.decks[deck].toggleCue();
+      if (event.kind === 'button' && event.control === 'headphone_cue') {
+        // Il pulsante cuffia fisico riporta lo stato reale (premuto/rilasciato), non un "click" momentaneo:
+        // lo specchiamo direttamente invece di alternarlo, altrimenti due letture ravvicinate lo
+        // lasciano "incastrato" acceso. Il click da mouse invece alterna (vedi onToggleCue in App.tsx).
+        engine.decks[deck].setCue(event.pressed);
       }
       if (event.kind === 'hotcue' && event.pressed) {
         if (event.action === 'activate') engine.decks[deck].setHotCueOrJump(event.pad);

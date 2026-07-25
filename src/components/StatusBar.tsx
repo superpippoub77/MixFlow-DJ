@@ -1,6 +1,7 @@
 import { Box, Button, Chip, MenuItem, Select, Typography, IconButton, Tooltip } from '@mui/material';
 import UsbIcon from '@mui/icons-material/Usb';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import SchoolIcon from '@mui/icons-material/School';
 import type { ConnectionStatus, MidiInputInfo } from '../midi/useDDJ200';
 
 const STATUS_LABEL: Record<ConnectionStatus, string> = {
@@ -29,8 +30,9 @@ export function StatusBar(props: {
   onConnect: () => void;
   onSelectInput: (id: string) => void;
   onInfoClick: () => void;
+  onTutorialClick: () => void;
 }) {
-  const { status, error, inputs, selectedInputId, onConnect, onSelectInput, onInfoClick } = props;
+  const { status, error, inputs, selectedInputId, onConnect, onSelectInput, onInfoClick, onTutorialClick } = props;
 
   return (
     <Box display="flex" alignItems="center" gap={2} flexWrap="wrap">
@@ -42,12 +44,17 @@ export function StatusBar(props: {
             <InfoOutlinedIcon fontSize="small" />
           </IconButton>
         </Tooltip>
+        <Tooltip title="Tutorial passo-passo">
+          <IconButton size="small" onClick={onTutorialClick} sx={{ opacity: 0.7 }}>
+            <SchoolIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
       </Box>
 
       <Chip size="small" label={STATUS_LABEL[status]} color={STATUS_COLOR[status]} variant="outlined" />
 
       {status !== 'connected' && status !== 'unsupported' && (
-        <Button size="small" variant="contained" onClick={onConnect}>
+        <Button id="tid-connect" size="small" variant="contained" onClick={onConnect}>
           {status === 'requesting' ? 'Attendi…' : 'Connetti controller'}
         </Button>
       )}

@@ -63,9 +63,32 @@ export function useDDJ200() {
       input.onmidimessage = handleMessage;
       setSelectedInputId(input.id);
       setStatus('connected');
+      requestControllerStateDump();
     },
     [handleMessage],
   );
+
+  /**
+   * Il DDJ-200 non annuncia da solo la posizione di knob/fader/pulsanti alla
+   * connessione (limite comune a molti controller MIDI). Esiste però un
+   * comando SysEx non documentato ufficialmente da Pioneer, ma verificato
+   * funzionante sul DDJ-200 dal progetto Mixxx: chiede al controller di
+   * rimandare lo stato attuale di ogni controllo, che arriva poi come normali
+   * messaggi MIDI (li intercettiamo con la stessa logica di sempre). Se il
+   * driver/browser rifiuta il SysEx, l'app resta comunque utilizzabile: i
+   * valori si sincronizzano semplicemente al primo tocco di ciascun controllo.
+   */
+  const requestControllerStateDump = useCallback(() => {
+    const access = midiAccessRef.current;
+    if (!access) return;
+    const output = Array.from(access.outputs.values()).find((o) => (o.name ?? '').toLowerCase().includes('ddj-200'));
+    if (!output) return;
+    try {
+      output.send([0xf0, 0x00, 0x20, 0x7f, 0x03, 0x01, 0xf7]);
+    } catch {
+      // alcuni browser/driver possono rifiutare il SysEx: non è bloccante
+    }
+  }, []);
 
   const refreshInputs = useCallback(
     (access: MIDIAccess) => {
@@ -98,7 +121,7 @@ export function useDDJ200() {
     setStatus('requesting');
     setError(undefined);
     try {
-      const access = await navigator.requestMIDIAccess({ sysex: false });
+      const access = await navigator.requestMIDIAccess({ sysex: true });
       midiAccessRef.current = access;
       access.onstatechange = () => refreshInputs(access);
       refreshInputs(access);

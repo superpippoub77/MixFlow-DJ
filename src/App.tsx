@@ -11,7 +11,8 @@ import { InfoDialog } from './components/InfoDialog';
 import { Footer } from './components/Footer';
 import { useDDJ200 } from './midi/useDDJ200';
 import { useAudioEngine } from './audio/useAudioEngine';
-import { useAutoMix } from './audio/useAutoMix';
+import { useAutoMix, type TransitionStyle } from './audio/useAutoMix';
+import { TutorialOverlay } from './components/TutorialOverlay';
 import { detectBpm } from './audio/bpmDetect';
 import { MixRecorder } from './audio/recorder';
 import { DEFAULT_TRIM, type TrimSettings } from './audio/deck';
@@ -86,8 +87,21 @@ export default function App() {
   const { values, setManual } = useManualOverrides(ddj.onEvent, ddj.values);
   const [bpms, setBpms] = useState<Record<1 | 2, number | null>>({ 1: null, 2: null });
   const [queues, setQueues] = useState<Record<1 | 2, QueueItem[]>>({ 1: [], 2: [] });
-  const [trackSettings, setTrackSettings] = useState<Record<string, TrimSettings>>({});
+  const [trackSettings, setTrackSettings] = useState<Record<string, TrimSettings>>(() => {
+    try {
+      const saved = localStorage.getItem('mixflowdj_track_settings');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('mixflowdj_track_settings', JSON.stringify(trackSettings));
+  }, [trackSettings]);
   const [infoOpen, setInfoOpen] = useState(false);
+  const [tutorialOpen, setTutorialOpen] = useState(false);
+  const [transitionStyle, setTransitionStyle] = useState<TransitionStyle>('crossfade');
 
   // --- registrazione del mix ---
   const recorderRef = useRef<MixRecorder | null>(null);
@@ -128,7 +142,7 @@ export default function App() {
     setManual('master.crossfader', value);
   }
 
-  const automix = useAutoMix(engine, snapshots, bpms, handleCrossfaderChange);
+  const automix = useAutoMix(engine, snapshots, bpms, handleCrossfaderChange, transitionStyle);
 
   function handleConnect() {
     engine.resume(); // sblocca l'AudioContext (e il preview cuffie) dentro un gesto utente reale (click)
@@ -290,6 +304,7 @@ export default function App() {
             onConnect={handleConnect}
             onSelectInput={ddj.selectInput}
             onInfoClick={() => setInfoOpen(true)}
+            onTutorialClick={() => setTutorialOpen(true)}
           />
         </Paper>
 
@@ -346,6 +361,8 @@ export default function App() {
               automixEnabled={automix.enabled}
               onToggleAutomix={() => automix.setEnabled((v) => !v)}
               automixStatus={automix.status}
+              transitionStyle={transitionStyle}
+              onChangeTransitionStyle={setTransitionStyle}
               masterCueActive={engine.isMasterCueActive()}
               onToggleMasterCue={handleToggleMasterCue}
               cueDeviceSupported={engine.cueMonitor.supportsDeviceSelection()}
@@ -440,6 +457,7 @@ export default function App() {
       </Container>
       <Footer />
       <InfoDialog open={infoOpen} onClose={() => setInfoOpen(false)} />
+      <TutorialOverlay open={tutorialOpen} onClose={() => setTutorialOpen(false)} />
     </Box>
   );
 }

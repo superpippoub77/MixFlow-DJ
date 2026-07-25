@@ -40,6 +40,7 @@ export function RecordingPanel({
         <Box display="flex" alignItems="center" gap={1.5}>
           {recording && <DotDisplay color="#ff5470">REC {formatDuration(elapsedSeconds)}</DotDisplay>}
           <Button
+            id="tid-recording"
             size="small"
             variant={recording ? 'contained' : 'outlined'}
             color={recording ? 'error' : 'inherit'}

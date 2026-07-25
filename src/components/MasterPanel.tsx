@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Box, Paper, Typography, Select, MenuItem, Button } from '@mui/material';
 import { palette } from '../theme';
 import { DotDisplay } from './DotDisplay';
-import type { AutoMixStatus } from '../audio/useAutoMix';
+import { TRANSITION_STYLE_LABELS, type AutoMixStatus, type TransitionStyle } from '../audio/useAutoMix';
 import { listAudioOutputDevices, type AudioOutputDevice } from '../audio/audioDevices';
 
 export function MasterPanel({
@@ -11,6 +11,8 @@ export function MasterPanel({
   automixEnabled,
   onToggleAutomix,
   automixStatus,
+  transitionStyle,
+  onChangeTransitionStyle,
   masterCueActive,
   onToggleMasterCue,
   cueDeviceSupported,
@@ -21,6 +23,8 @@ export function MasterPanel({
   automixEnabled: boolean;
   onToggleAutomix: () => void;
   automixStatus: AutoMixStatus;
+  transitionStyle: TransitionStyle;
+  onChangeTransitionStyle: (style: TransitionStyle) => void;
   masterCueActive: boolean;
   onToggleMasterCue: () => void;
   cueDeviceSupported: boolean;
@@ -28,6 +32,17 @@ export function MasterPanel({
 }) {
   const crossfader = values['master.crossfader'] ?? 0.5;
   const autodj = (values['master.autodj_enable'] ?? 0) > 0;
+
+  // Stato locale per lo slider: aggiorna la UI istantaneamente durante il
+  // trascinamento invece di dipendere dal re-render dell'intero albero
+  // (che coinvolge anche i due DeckPanel ogni volta che "values" cambia).
+  const [localCrossfader, setLocalCrossfader] = useState(crossfader);
+  useEffect(() => setLocalCrossfader(crossfader), [crossfader]);
+
+  function handleCrossfaderInput(value: number) {
+    setLocalCrossfader(value);
+    onCrossfaderChange(value);
+  }
 
   const [devices, setDevices] = useState<AudioOutputDevice[]>([]);
   const [selectedDevice, setSelectedDevice] = useState('');
@@ -97,7 +112,20 @@ export function MasterPanel({
               TRANSITION FX
             </Typography>
             <Box display="flex" alignItems="center" gap={1}>
+              <Select
+                size="small"
+                value={transitionStyle}
+                onChange={(e) => onChangeTransitionStyle(e.target.value as TransitionStyle)}
+                sx={{ fontSize: 12, minWidth: 150 }}
+              >
+                {(Object.keys(TRANSITION_STYLE_LABELS) as TransitionStyle[]).map((key) => (
+                  <MenuItem key={key} value={key} sx={{ fontSize: 13 }}>
+                    {TRANSITION_STYLE_LABELS[key]}
+                  </MenuItem>
+                ))}
+              </Select>
               <Box
+                id="tid-master-automix"
                 onClick={onToggleAutomix}
                 sx={{
                   px: 1.5,
@@ -132,19 +160,20 @@ export function MasterPanel({
         </Typography>
         <Box flex={1}>
           <input
+            id="tid-master-crossfader"
             type="range"
             min={0}
             max={1}
             step={0.005}
-            value={crossfader}
-            onChange={(e) => onCrossfaderChange(parseFloat(e.target.value))}
+            value={localCrossfader}
+            onChange={(e) => handleCrossfaderInput(parseFloat(e.target.value))}
             style={{ width: '100%', accentColor: palette.master, cursor: 'pointer' }}
           />
         </Box>
         <Typography variant="caption" sx={{ opacity: 0.6, color: palette.deck2, fontFamily: 'JetBrains Mono, monospace' }}>
           D2
         </Typography>
-        <DotDisplay color={palette.master}>{(crossfader * 100).toFixed(0)}%</DotDisplay>
+        <DotDisplay color={palette.master}>{(localCrossfader * 100).toFixed(0)}%</DotDisplay>
       </Box>
 
       <Box borderTop="1px solid #2b2f37" pt={1.5}>

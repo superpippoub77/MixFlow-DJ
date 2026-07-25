@@ -379,6 +379,27 @@ registrazione.
 
 
 
+## Correzioni: valori iniziali e cuffia bloccata
+
+- **EQ, tempo e volume ora partono da una posizione neutra sensata** (0.5 =
+  centro per EQ/tempo, pieno per il volume) invece che da 0 — prima, finché
+  un controllo non veniva toccato almeno una volta (fisicamente o via SysEx),
+  la UI mostrava 0, che per EQ/tempo significa un estremo (taglio totale /
+  pitch al minimo), non una posizione neutra.
+- **Cuffia (headphone cue) che restava sempre accesa**: il pulsante fisico
+  riporta lo stato reale (premuto/rilasciato), non un semplice "click" — il
+  codice lo trattava come un interruttore da alternare a ogni pressione, e
+  due letture ravvicinate potevano lasciarlo "incastrato" acceso. Ora lo
+  stato segue direttamente quello riportato dal controller. Il click da
+  mouse continua ad alternare normalmente (non ha un concetto di
+  "rilascio").
+- **Play/Cue che non si illuminavano dal controller fisico**: se il
+  controller manda pressione+rilascio in pochi millisecondi, il lampo può
+  essere troppo veloce per vederlo. Ora c'è un lampo garantito di almeno
+  180ms ogni volta che arriva una pressione reale da MIDI.
+
+
+
 ## Mappa MIDI (riassunto)
 
 | Controllo | Canale/Status | Note/CC |
