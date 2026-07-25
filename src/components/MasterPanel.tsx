@@ -1,9 +1,91 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Box, Paper, Typography, Select, MenuItem, Button } from '@mui/material';
 import { palette } from '../theme';
 import { DotDisplay } from './DotDisplay';
 import { TRANSITION_STYLE_LABELS, type AutoMixStatus, type TransitionStyle } from '../audio/useAutoMix';
 import { listAudioOutputDevices, type AudioOutputDevice } from '../audio/audioDevices';
+
+/**
+ * Crossfader ricostruito da zero come componente a puntatore (niente
+ * `<input type="range">`): il valore è calcolato direttamente dalla
+ * posizione X del puntatore sulla traccia, con pointer capture per un
+ * trascinamento continuo e lineare, senza dipendere da alcun re-render
+ * esterno o comportamento nativo del browser.
+ */
+function CrossfaderTrack({ value, onChange, color }: { value: number; onChange: (v: number) => void; color: string }) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
+
+  function updateFromClientX(clientX: number) {
+    const track = trackRef.current;
+    if (!track) return;
+    const rect = track.getBoundingClientRect();
+    const fraction = (clientX - rect.left) / rect.width;
+    onChange(Math.min(1, Math.max(0, fraction)));
+  }
+
+  function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    draggingRef.current = true;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    updateFromClientX(e.clientX);
+  }
+  function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!draggingRef.current) return;
+    updateFromClientX(e.clientX);
+  }
+  function handlePointerUp() {
+    draggingRef.current = false;
+  }
+
+  return (
+    <Box
+      ref={trackRef}
+      id="tid-master-crossfader"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      sx={{
+        position: 'relative',
+        width: '100%',
+        height: 28,
+        display: 'flex',
+        alignItems: 'center',
+        cursor: 'pointer',
+        touchAction: 'none',
+        userSelect: 'none',
+      }}
+    >
+      <Box
+        sx={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: '50%',
+          height: 6,
+          borderRadius: 3,
+          background: '#181b20',
+          transform: 'translateY(-50%)',
+          pointerEvents: 'none',
+        }}
+      />
+      <Box
+        sx={{
+          position: 'absolute',
+          left: `${value * 100}%`,
+          top: '50%',
+          width: 20,
+          height: 20,
+          borderRadius: '50%',
+          background: color,
+          transform: 'translate(-50%, -50%)',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.6)',
+          pointerEvents: 'none',
+        }}
+      />
+    </Box>
+  );
+}
 
 export function MasterPanel({
   values,
@@ -159,16 +241,7 @@ export function MasterPanel({
           D1
         </Typography>
         <Box flex={1}>
-          <input
-            id="tid-master-crossfader"
-            type="range"
-            min={0}
-            max={1}
-            step={0.005}
-            value={localCrossfader}
-            onChange={(e) => handleCrossfaderInput(parseFloat(e.target.value))}
-            style={{ width: '100%', accentColor: palette.master, cursor: 'pointer' }}
-          />
+          <CrossfaderTrack value={localCrossfader} onChange={handleCrossfaderInput} color={palette.master} />
         </Box>
         <Typography variant="caption" sx={{ opacity: 0.6, color: palette.deck2, fontFamily: 'JetBrains Mono, monospace' }}>
           D2

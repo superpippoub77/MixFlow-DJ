@@ -4,6 +4,7 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import HeadphonesIcon from '@mui/icons-material/Headphones';
 import type { DeckSnapshot } from '../audio/deck';
+import { TEMPO_RANGE_LABELS } from '../audio/deck';
 import { DotDisplay } from './DotDisplay';
 import { formatTime, parseTimeInput } from '../utils/time';
 
@@ -292,11 +293,21 @@ function Knob({ label, value, color, onChange, id }: { label: string; value: num
 }
 
 /** Fader verticale (tempo), come sull'hardware reale: 0 al centro, tacche +/- ai lati */
-function VerticalTempoFader({ value, color, onChange }: { value: number; color: string; onChange: (v: number) => void }) {
+function VerticalTempoFader({
+  value,
+  color,
+  onChange,
+  tempoRangePercent,
+}: {
+  value: number;
+  color: string;
+  onChange: (v: number) => void;
+  tempoRangePercent: number;
+}) {
   return (
     <Box display="flex" flexDirection="column" alignItems="center" gap={0.5} height="100%">
       <Typography variant="caption" sx={{ opacity: 0.6, fontFamily: 'JetBrains Mono, monospace', fontSize: 9 }}>
-        +
+        -
       </Typography>
       <Box
         sx={{
@@ -319,18 +330,18 @@ function VerticalTempoFader({ value, color, onChange }: { value: number; color: 
             width: 120,
             accentColor: color,
             cursor: 'pointer',
-            transform: 'rotate(-90deg)',
+            transform: 'rotate(90deg)',
             transformOrigin: 'center',
           }}
         />
       </Box>
       <Typography variant="caption" sx={{ opacity: 0.6, fontFamily: 'JetBrains Mono, monospace', fontSize: 9 }}>
-        -
+        +
       </Typography>
       <Typography variant="caption" sx={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.1em' }}>
         TEMPO
       </Typography>
-      <DotDisplay color={color}>{((value - 0.5) * 16).toFixed(1)}%</DotDisplay>
+      <DotDisplay color={color}>{((value - 0.5) * 2 * tempoRangePercent).toFixed(1)}%</DotDisplay>
     </Box>
   );
 }
@@ -464,6 +475,7 @@ export function DeckPanel(props: {
   onToggleCue: () => void;
   onToggleShift: () => void;
   onSync: () => void;
+  onCycleTempoRange: () => void;
   onSkipNext: () => void;
   onRemoveQueueItem: (id: string) => void;
   onMoveQueueItem: (id: string, direction: 'up' | 'down') => void;
@@ -492,6 +504,7 @@ export function DeckPanel(props: {
     onToggleCue,
     onToggleShift,
     onSync,
+    onCycleTempoRange,
     onSkipNext,
     onRemoveQueueItem,
     onMoveQueueItem,
@@ -511,20 +524,11 @@ export function DeckPanel(props: {
   const pressed = (name: string) => (values[`${deck}.${name}`] ?? 0) > 0;
   const filterValue = values[`master.filter_deck${deck}`] ?? 0.5;
   const [jogPressed, setJogPressed] = useState(false);
-  const [cuePressed, setCuePressed] = useState(false);
   const [playFlash, setPlayFlash] = useState(false);
 
   // Il controller fisico a volte manda "premuto"+"rilasciato" in pochi millisecondi
-  // (troppo veloce perché l'occhio lo veda): questi effetti garantiscono un lampo
+  // (troppo veloce perché l'occhio lo veda): questo effetto garantisce un lampo
   // visibile di almeno 180ms ogni volta che arriva una pressione reale da MIDI.
-  const cueRaw = (values[`${deck}.cue`] ?? 0) > 0;
-  useEffect(() => {
-    if (!cueRaw) return;
-    setCuePressed(true);
-    const timer = window.setTimeout(() => setCuePressed(false), 180);
-    return () => window.clearTimeout(timer);
-  }, [cueRaw]);
-
   const playRaw = (values[`${deck}.play`] ?? 0) > 0;
   useEffect(() => {
     if (!playRaw) return;
@@ -607,35 +611,34 @@ export function DeckPanel(props: {
             <RoundButton
               id={deck === 1 ? 'tid-deck1-sync' : undefined}
               label="BEAT SYNC"
-              active={pressed('sync')}
+              active={track.syncActive}
               color={color}
               size={30}
               onClick={syncAvailable ? onSync : undefined}
             />
-            <RoundButton label="TEMPO RANGE" active={false} color={color} size={30} />
+            <Box display="flex" flexDirection="column" alignItems="center" gap={0.4}>
+              <RoundButton label="TEMPO RANGE" active={false} color={color} size={30} onClick={onCycleTempoRange} />
+              <DotDisplay color={color}>{TEMPO_RANGE_LABELS[track.tempoRange] ?? '±8%'}</DotDisplay>
+            </Box>
           </Box>
 
           <Box display="flex" gap={1}>
             <Box
               id={deck === 1 ? 'tid-deck1-cue' : undefined}
-              onClick={() => {
-                onCue();
-                setCuePressed(true);
-                window.setTimeout(() => setCuePressed(false), 180);
-              }}
+              onClick={onCue}
               sx={{
                 width: 46,
                 height: 46,
                 borderRadius: '50%',
-                border: `2px solid ${pressed('cue') || cuePressed ? color : '#2b2f37'}`,
-                background: pressed('cue') || cuePressed ? color : '#181b20',
+                border: `2px solid ${track.cuePointSet ? color : '#2b2f37'}`,
+                background: track.cuePointSet ? color : '#181b20',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
                 fontSize: 10,
                 fontFamily: 'JetBrains Mono, monospace',
-                color: pressed('cue') || cuePressed ? '#111' : '#8b909c',
+                color: track.cuePointSet ? '#111' : '#8b909c',
                 transition: 'background 60ms, border-color 60ms',
               }}
             >
@@ -690,7 +693,7 @@ export function DeckPanel(props: {
 
         {/* Tempo verticale */}
         <Box flexShrink={0} sx={{ minHeight: 200 }}>
-          <VerticalTempoFader value={v('tempo')} color={color} onChange={onTempoChange} />
+          <VerticalTempoFader value={v('tempo')} color={color} onChange={onTempoChange} tempoRangePercent={track.tempoRange * 100} />
         </Box>
 
         {/* Volume + pad, occupano lo spazio restante */}

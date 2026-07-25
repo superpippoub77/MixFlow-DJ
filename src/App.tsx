@@ -15,7 +15,7 @@ import { useAutoMix, type TransitionStyle } from './audio/useAutoMix';
 import { TutorialOverlay } from './components/TutorialOverlay';
 import { detectBpm } from './audio/bpmDetect';
 import { MixRecorder } from './audio/recorder';
-import { DEFAULT_TRIM, type TrimSettings } from './audio/deck';
+import { DEFAULT_TRIM, TEMPO_RANGES, type TrimSettings } from './audio/deck';
 import { palette } from './theme';
 
 type QueueItem =
@@ -83,9 +83,9 @@ function useManualOverrides(onEvent: ReturnType<typeof useDDJ200>['onEvent'], ba
 export default function App() {
   const ddj = useDDJ200();
   const jogAngles = useJogAngles(ddj.onEvent);
-  const { engine, snapshots } = useAudioEngine(ddj.onEvent);
-  const { values, setManual } = useManualOverrides(ddj.onEvent, ddj.values);
   const [bpms, setBpms] = useState<Record<1 | 2, number | null>>({ 1: null, 2: null });
+  const { engine, snapshots } = useAudioEngine(ddj.onEvent, bpms);
+  const { values, setManual } = useManualOverrides(ddj.onEvent, ddj.values);
   const [queues, setQueues] = useState<Record<1 | 2, QueueItem[]>>({ 1: [], 2: [] });
   const [trackSettings, setTrackSettings] = useState<Record<string, TrimSettings>>(() => {
     try {
@@ -168,13 +168,13 @@ export default function App() {
     engine.decks[deck].seekTo(seconds);
   }
   function handleSync(deck: 1 | 2) {
-    const other = deck === 1 ? 2 : 1;
-    const myBpm = bpms[deck];
-    const otherBpm = bpms[other];
-    if (!myBpm || !otherBpm) return; // servono entrambi i BPM per sincronizzare
-    const otherRate = engine.decks[other].getPlaybackRate();
-    const newRate = (otherBpm * otherRate) / myBpm;
-    engine.decks[deck].setPlaybackRateAbsolute(newRate);
+    engine.toggleSync(deck, bpms);
+  }
+  function handleCycleTempoRange(deck: 1 | 2) {
+    const current = engine.decks[deck].getTempoRange();
+    const idx = TEMPO_RANGES.indexOf(current as (typeof TEMPO_RANGES)[number]);
+    const next = TEMPO_RANGES[(idx + 1) % TEMPO_RANGES.length];
+    engine.decks[deck].setTempoRange(next);
   }
   function handleEQChange(deck: 1 | 2, band: 'low' | 'mid' | 'high', value: number) {
     engine.decks[deck].setEQ(band, value);
@@ -346,6 +346,7 @@ export default function App() {
               onToggleCue={() => handleToggleCue(1)}
               onToggleShift={() => handleToggleShift(1)}
               onSync={() => handleSync(1)}
+              onCycleTempoRange={() => handleCycleTempoRange(1)}
               onSkipNext={() => advanceQueue(1)}
               onRemoveQueueItem={(id) => handleRemoveFromQueue(1, id)}
               onMoveQueueItem={(id, dir) => handleMoveQueueItem(1, id, dir)}
@@ -393,6 +394,7 @@ export default function App() {
               onToggleCue={() => handleToggleCue(2)}
               onToggleShift={() => handleToggleShift(2)}
               onSync={() => handleSync(2)}
+              onCycleTempoRange={() => handleCycleTempoRange(2)}
               onSkipNext={() => advanceQueue(2)}
               onRemoveQueueItem={(id) => handleRemoveFromQueue(2, id)}
               onMoveQueueItem={(id, dir) => handleMoveQueueItem(2, id, dir)}

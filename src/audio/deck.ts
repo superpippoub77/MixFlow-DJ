@@ -20,14 +20,22 @@ export interface DeckSnapshot {
   currentTime: number;
   duration: number;
   cueActive: boolean;
+  cuePointSet: boolean;
+  syncActive: boolean;
+  tempoRange: number;
   hotCues: Record<number, boolean>;
   playbackRate: number;
 }
 
-// Il fader del tempo del DDJ-200 di default copre ±8% (selezionabile in
-// hardware su ±6/±10/±16/±100%, ma software-side vediamo solo la posizione
-// 0..1 del fader): assumiamo qui il default ±8%.
-const TEMPO_RANGE = 0.08;
+// Range del pitch selezionabili con SHIFT + BEAT SYNC (come sull'hardware reale: ±6/±10/±16%/Wide)
+export const TEMPO_RANGES = [0.06, 0.1, 0.16, 1] as const;
+export const TEMPO_RANGE_LABELS: Record<number, string> = {
+  [0.06]: '±6%',
+  [0.1]: '±10%',
+  [0.16]: '±16%',
+  [1]: 'WIDE',
+};
+
 // Range EQ in stile "DJ kill": knob al centro (0.5) = 0 dB, agli estremi ±12 dB.
 const EQ_RANGE_DB = 12;
 
@@ -56,6 +64,10 @@ export class Deck {
   private volumeFader = 1; // posizione 0..1 del fader volume del mixer
   private crossfaderGain = 1; // 0..1, calcolato dal crossfader master
   private cueActive = false;
+  private cuePoint: number | null = null;
+  private syncActive = false;
+  private tempoRange: number = TEMPO_RANGES[0];
+  private lastTempoFaderValue = 0.5;
   private hotCues: Record<number, number | null> = { 1: null, 2: null, 3: null, 4: null, 5: null, 6: null, 7: null, 8: null };
   private trimStart: number | null = null;
   private trimEnd: number | null = null;
@@ -237,10 +249,29 @@ export class Deck {
     return false;
   }
 
-  /** CUE: torna al punto di inizio (personalizzato, se impostato nella libreria) */
+  /**
+   * CUE: se il deck sta suonando, torna al cue point salvato e mette in
+   * pausa. Se è fermo e non c'è ancora un cue point, lo imposta qui; se
+   * c'è già, ci salta. Il LED (vedi getSnapshot -> cuePointSet) resta
+   * acceso finché un cue point è memorizzato, non solo mentre premi.
+   */
   cue() {
-    this.seekTo(this.trimStart ?? 0);
+    if (this.isPlaying()) {
+      this.seekTo(this.cuePoint ?? this.trimStart ?? 0);
+      this.pause();
+    } else if (this.cuePoint == null) {
+      this.cuePoint = this.getCurrentTime();
+    } else {
+      this.seekTo(this.cuePoint);
+    }
+    this.notify();
+  }
+
+  /** SHIFT + CUE: torna sempre all'inizio della traccia (non al cue point) */
+  goToStart() {
+    this.seekTo(0);
     this.pause();
+    this.notify();
   }
 
   seekBy(deltaSeconds: number) {
@@ -285,6 +316,8 @@ export class Deck {
     this.fadeOutEnabled = trim.fadeOut;
     this.fadeDuration = Math.max(0.5, trim.fadeDuration);
     this.trimFadeGain.gain.value = this.fadeInEnabled ? 0 : 1;
+    this.cuePoint = trim.start; // il punto di inizio personalizzato è anche il cue point iniziale
+    this.syncActive = false;
 
     if (this.trimTimer != null) clearInterval(this.trimTimer);
     this.trimTimer = setInterval(() => this.tickTrim(), 100);
@@ -355,8 +388,29 @@ export class Deck {
   }
 
   setTempo(value: number) {
-    const rate = 1 + (value - 0.5) * 2 * TEMPO_RANGE;
+    this.lastTempoFaderValue = value;
+    const rate = 1 + (value - 0.5) * 2 * this.tempoRange;
     this.setPlaybackRateAbsolute(rate);
+  }
+
+  /** SHIFT + BEAT SYNC: cambia il range del pitch (±6/±10/±16%/Wide) e lo riapplica subito alla posizione attuale del fader */
+  setTempoRange(range: number) {
+    this.tempoRange = range;
+    this.setTempo(this.lastTempoFaderValue);
+  }
+
+  getTempoRange(): number {
+    return this.tempoRange;
+  }
+
+  /** Stato del LED Beat Sync: acceso quando il sync è attivo (interruttore persistente, non "mentre premi") */
+  isSyncActive(): boolean {
+    return this.syncActive;
+  }
+
+  setSyncActive(active: boolean) {
+    this.syncActive = active;
+    this.notify();
   }
 
   /** Imposta direttamente il rapporto di velocità (usato dall'automix per il beatmatching), bypassando il range ±8% del fader tempo */
@@ -435,6 +489,9 @@ export class Deck {
       currentTime: this.getCurrentTime(),
       duration: this.getDuration(),
       cueActive: this.cueActive,
+      cuePointSet: this.cuePoint != null,
+      syncActive: this.syncActive,
+      tempoRange: this.tempoRange,
       hotCues,
       playbackRate: this.getPlaybackRate(),
     };

@@ -400,6 +400,47 @@ registrazione.
 
 
 
+## Comportamento reale dei LED (corretto secondo la documentazione hardware)
+
+Grazie a un riferimento preciso sul funzionamento del DDJ-200, ho corretto
+diversi comportamenti che prima erano solo un'approssimazione:
+
+- **CUE**: ora è un vero cue point, non un lampo momentaneo. Da fermo, il
+  primo CUE lo imposta al punto attuale; i successivi ci saltano. In
+  riproduzione, CUE torna al cue point e mette in pausa. Il LED resta acceso
+  finché un cue point è memorizzato (si azzera solo caricando un nuovo
+  brano). **SHIFT + CUE** torna invece sempre all'inizio della traccia
+  (0:00), ignorando il cue point.
+- **BEAT SYNC** è ora un interruttore persistente (acceso = sync attivo,
+  spento = disattivato), non più legato alla semplice pressione. **SHIFT +
+  BEAT SYNC** cambia il range del pitch (±6% → ±10% → ±16% → Wide, ciclico),
+  mostrato sotto il pulsante TEMPO RANGE — anche lui ora cliccabile da mouse.
+- **Cuffia (headphone cue)**: il toggle ora scatta solo sul fronte di salita
+  della pressione (il momento esatto in cui il tasto viene premuto),
+  ignorando eventuali messaggi ripetuti mentre resta fisicamente giù — questo
+  evita che possa restare "incastrato" acceso per doppio conteggio.
+- **Play**: resta legato allo stato reale di riproduzione, con in più un
+  lampo minimo garantito (180ms) per pressioni fisiche molto rapide.
+- **EQ, tempo e volume** partono da una posizione neutra sensata (0.5 =
+  centro, volume pieno) invece che da 0, finché il valore reale non viene
+  letto dal controller.
+
+## Fader tempo invertito
+
+Il fader tempo verticale ora ha il **"-" in alto e il "+" in basso**
+(prima era il contrario).
+
+## Crossfader ricostruito da zero
+
+Il crossfader non usa più un `<input type="range">`: è un componente
+completamente nuovo basato su eventi pointer con **pointer capture**
+(`CrossfaderTrack` in `MasterPanel.tsx`), che calcola il valore direttamente
+dalla posizione X del puntatore sulla traccia. Elimina qualunque dipendenza
+da comportamenti nativi del browser o da re-render di componenti esterni:
+il trascinamento segue il cursore in modo continuo e lineare.
+
+
+
 ## Mappa MIDI (riassunto)
 
 | Controllo | Canale/Status | Note/CC |

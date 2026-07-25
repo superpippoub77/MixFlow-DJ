@@ -78,6 +78,28 @@ export class AudioEngine {
     return this.masterCueActive;
   }
 
+  /**
+   * BEAT SYNC: interruttore persistente (non un'azione momentanea). Se lo
+   * attivi e conosciamo il BPM di entrambe le tracce, allinea la velocità di
+   * questo deck a quella dell'altro. Se lo disattivi, il LED si spegne (il
+   * pitch raggiunto resta quello finché non tocchi di nuovo il fader tempo).
+   */
+  toggleSync(deck: 1 | 2, bpms: Record<1 | 2, number | null>) {
+    const other = deck === 1 ? 2 : 1;
+    const d = this.decks[deck];
+    if (d.isSyncActive()) {
+      d.setSyncActive(false);
+      return;
+    }
+    const myBpm = bpms[deck];
+    const otherBpm = bpms[other];
+    if (myBpm && otherBpm) {
+      const otherRate = this.decks[other].getPlaybackRate();
+      d.setPlaybackRateAbsolute((otherBpm * otherRate) / myBpm);
+    }
+    d.setSyncActive(true);
+  }
+
   private applyMix() {
     // Curva a potenza costante, standard per i crossfader dei mixer DJ.
     const gain1 = Math.cos((this.crossfaderPos * Math.PI) / 2);
