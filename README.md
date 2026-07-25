@@ -310,6 +310,75 @@ punto di fine).
 
 
 
+## Libreria persistente (sopravvive al refresh)
+
+Fino ad ora ricaricare la pagina svuotava tutto. Ora:
+
+- **File locali**: vengono salvati nell'IndexedDB del browser (il database
+  interno, adatto a file grandi — a differenza di localStorage) tramite
+  `src/utils/localLibraryDB.ts`. Al riavvio dell'app la libreria si ricarica
+  da sola, BPM incluso (ricalcolato in background). Ogni brano ha ora anche
+  una **×** per rimuoverlo definitivamente dalla libreria salvata.
+- **Risultati/playlist YouTube**: gli ultimi risultati mostrati restano in
+  `localStorage` e si ricaricano all'apertura della pagina.
+- **Inizio/fine/fade per brano**: le impostazioni di taglio (vedi sopra)
+  sono anch'esse salvate in `localStorage`, legate alla stessa chiave
+  stabile del brano.
+
+Tutto è locale al tuo browser: non c'è nessun server esterno coinvolto.
+Se cambi browser o svuoti i dati del sito, la libreria salvata si perde.
+
+
+
+## Stato iniziale dei controlli alla connessione
+
+Il DDJ-200 non annuncia da solo la posizione di knob/fader/pulsanti quando ti
+connetti (limite comune a molti controller MIDI: normalmente inviano un
+messaggio solo quando muovi qualcosa, non "su richiesta"). Esiste però un
+comando **SysEx non documentato ufficialmente da Pioneer**, individuato dal
+progetto Mixxx facendo reverse engineering del traffico USB tra rekordbox e
+il DDJ-200, che dice al controller "rimandami lo stato di ogni controllo":
+`[0xF0, 0x00, 0x20, 0x7F, 0x03, 0x01, 0xF7]`.
+
+L'app ora lo invia automaticamente non appena il DDJ-200 si connette (vedi
+`requestControllerStateDump` in `src/midi/useDDJ200.ts`), quindi conosce quasi
+subito i valori con cui è iniziata la sessione, invece di aspettare che tu
+muova ogni singolo controllo per la prima volta. Non essendo documentato
+ufficialmente potrebbe non funzionare su ogni unità/firmware: se il
+comando viene rifiutato dal driver, l'app continua comunque a funzionare
+normalmente (i valori si sincronizzano al primo tocco, come prima).
+
+
+
+## Più stili di Transition FX
+
+L'Automix non fa più solo un crossfade classico: dal menu accanto al
+pulsante AUTOMIX puoi scegliere lo stile di transizione:
+
+- **Crossfade classico** — il passaggio graduale di sempre (12s, curva a
+  potenza costante)
+- **Filter sweep** — il deck in uscita viene progressivamente "filtrato via"
+  (low-pass crescente) mentre sfuma
+- **Echo out** — attiva l'eco sul master per tutta la durata della
+  transizione, poi la spegne
+- **Cut secco** — passaggio molto più rapido (2s), per generi che richiedono
+  tagli netti invece di lunghe sovrapposizioni
+
+Implementato in `src/audio/useAutoMix.ts`.
+
+## Tutorial interattivo
+
+L'icona 🎓 accanto al titolo apre un tutorial passo-passo
+(`src/components/TutorialOverlay.tsx`): 12 lezioni che spiegano cosa fa ogni
+controllo, con uno **spotlight** che evidenzia esattamente il pulsante/knob/
+fader di cui si sta parlando (il resto dello schermo si scurisce). Puoi
+andare avanti/indietro liberamente o chiudere il tutorial in qualsiasi
+momento. Copre: connessione controller, caricare un brano, play/cue, volume,
+EQ, filtro, crossfader, hot cue, beat sync, automix/transition FX,
+registrazione.
+
+
+
 ## Mappa MIDI (riassunto)
 
 | Controllo | Canale/Status | Note/CC |
