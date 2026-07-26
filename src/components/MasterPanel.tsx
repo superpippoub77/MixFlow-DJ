@@ -95,10 +95,13 @@ export function MasterPanel({
   automixStatus,
   transitionStyle,
   onChangeTransitionStyle,
+  transitionArmed,
+  onToggleTransitionArm,
   masterCueActive,
   onToggleMasterCue,
   cueDeviceSupported,
   onSelectCueDevice,
+  testActive,
 }: {
   values: Record<string, number>;
   onCrossfaderChange: (value: number) => void;
@@ -107,13 +110,17 @@ export function MasterPanel({
   automixStatus: AutoMixStatus;
   transitionStyle: TransitionStyle;
   onChangeTransitionStyle: (style: TransitionStyle) => void;
+  transitionArmed: boolean;
+  onToggleTransitionArm: () => void;
   masterCueActive: boolean;
   onToggleMasterCue: () => void;
   cueDeviceSupported: boolean;
   onSelectCueDevice: (deviceId: string) => void;
+  testActive: string | null;
 }) {
   const crossfader = values['master.crossfader'] ?? 0.5;
   const autodj = (values['master.autodj_enable'] ?? 0) > 0;
+  const lit = (actual: boolean, key: string) => actual || testActive === key;
 
   // Stato locale per lo slider: aggiorna la UI istantaneamente durante il
   // trascinamento invece di dipendere dal re-render dell'intero albero
@@ -163,9 +170,9 @@ export function MasterPanel({
               fontSize: 11,
               fontFamily: 'JetBrains Mono, monospace',
               cursor: 'pointer',
-              border: `1px solid ${masterCueActive ? palette.master : '#2b2f37'}`,
-              background: masterCueActive ? palette.master : 'transparent',
-              color: masterCueActive ? '#111' : '#8b909c',
+              border: `1px solid ${lit(masterCueActive, 'master-cue') ? palette.master : '#2b2f37'}`,
+              background: lit(masterCueActive, 'master-cue') ? palette.master : 'transparent',
+              color: lit(masterCueActive, 'master-cue') ? '#111' : '#8b909c',
             }}
           >
             MASTER CUE
@@ -186,26 +193,30 @@ export function MasterPanel({
             AUTO DJ {autodj ? 'ON' : 'OFF'}
           </Box>
 
-          {/* TRANSITION FX: sul controller reale applica un effetto automatico
-              durante il passaggio tra i deck. Qui riusiamo la stessa idea per
-              attivare/disattivare l'Automix (crossfade + beatmatching automatico). */}
           <Box display="flex" flexDirection="column" alignItems="center" gap={0.3}>
             <Typography variant="caption" sx={{ opacity: 0.5, fontFamily: 'JetBrains Mono, monospace', fontSize: 8, letterSpacing: '0.08em' }}>
-              TRANSITION FX
+              STILE TRANSIZIONE
+            </Typography>
+            <Select
+              size="small"
+              value={transitionStyle}
+              onChange={(e) => onChangeTransitionStyle(e.target.value as TransitionStyle)}
+              sx={{ fontSize: 12, minWidth: 150 }}
+            >
+              {(Object.keys(TRANSITION_STYLE_LABELS) as TransitionStyle[]).map((key) => (
+                <MenuItem key={key} value={key} sx={{ fontSize: 13 }}>
+                  {TRANSITION_STYLE_LABELS[key]}
+                </MenuItem>
+              ))}
+            </Select>
+          </Box>
+
+          {/* AUTOMIX: mix automatico a timer, parte da solo quando il brano attivo sta per finire */}
+          <Box display="flex" flexDirection="column" alignItems="center" gap={0.3}>
+            <Typography variant="caption" sx={{ opacity: 0.5, fontFamily: 'JetBrains Mono, monospace', fontSize: 8, letterSpacing: '0.08em' }}>
+              AUTOMIX
             </Typography>
             <Box display="flex" alignItems="center" gap={1}>
-              <Select
-                size="small"
-                value={transitionStyle}
-                onChange={(e) => onChangeTransitionStyle(e.target.value as TransitionStyle)}
-                sx={{ fontSize: 12, minWidth: 150 }}
-              >
-                {(Object.keys(TRANSITION_STYLE_LABELS) as TransitionStyle[]).map((key) => (
-                  <MenuItem key={key} value={key} sx={{ fontSize: 13 }}>
-                    {TRANSITION_STYLE_LABELS[key]}
-                  </MenuItem>
-                ))}
-              </Select>
               <Box
                 id="tid-master-automix"
                 onClick={onToggleAutomix}
@@ -219,18 +230,45 @@ export function MasterPanel({
                   fontFamily: 'JetBrains Mono, monospace',
                   cursor: 'pointer',
                   userSelect: 'none',
-                  border: `1px solid ${automixEnabled ? palette.master : '#2b2f37'}`,
-                  background: automixEnabled ? palette.master : 'transparent',
-                  color: automixEnabled ? '#111' : '#8b909c',
+                  border: `1px solid ${lit(automixEnabled, 'master-automix') ? palette.master : '#2b2f37'}`,
+                  background: lit(automixEnabled, 'master-automix') ? palette.master : 'transparent',
+                  color: lit(automixEnabled, 'master-automix') ? '#111' : '#8b909c',
                 }}
               >
-                AUTOMIX {automixEnabled ? 'ON' : 'OFF'}
+                {automixEnabled ? 'ON' : 'OFF'}
               </Box>
               {automixStatus === 'mixing' && (
                 <Typography variant="caption" sx={{ color: palette.master, fontFamily: 'JetBrains Mono, monospace' }}>
                   mix in corso…
                 </Typography>
               )}
+            </Box>
+          </Box>
+
+          {/* TRANSITION FX: come sull'hardware reale, "arma" l'effetto scelto sopra; sei tu a
+              trascinare il crossfader per applicarlo in proporzione, invece di un timer automatico. */}
+          <Box display="flex" flexDirection="column" alignItems="center" gap={0.3}>
+            <Typography variant="caption" sx={{ opacity: 0.5, fontFamily: 'JetBrains Mono, monospace', fontSize: 8, letterSpacing: '0.08em' }}>
+              TRANSITION FX
+            </Typography>
+            <Box
+              onClick={onToggleTransitionArm}
+              sx={{
+                px: 1.5,
+                py: 0.5,
+                borderRadius: 1,
+                fontSize: 12,
+                fontWeight: 700,
+                letterSpacing: '0.05em',
+                fontFamily: 'JetBrains Mono, monospace',
+                cursor: 'pointer',
+                userSelect: 'none',
+                border: `1px solid ${lit(transitionArmed, 'master-transition') ? palette.master : '#2b2f37'}`,
+                background: lit(transitionArmed, 'master-transition') ? palette.master : 'transparent',
+                color: lit(transitionArmed, 'master-transition') ? '#111' : '#8b909c',
+              }}
+            >
+              {transitionArmed ? 'ARMATO' : 'ARMA'}
             </Box>
           </Box>
         </Box>

@@ -23,6 +23,7 @@ export interface DeckSnapshot {
   cuePointSet: boolean;
   syncActive: boolean;
   tempoRange: number;
+  loopActive: boolean;
   hotCues: Record<number, boolean>;
   playbackRate: number;
 }
@@ -65,6 +66,10 @@ export class Deck {
   private crossfaderGain = 1; // 0..1, calcolato dal crossfader master
   private cueActive = false;
   private cuePoint: number | null = null;
+  private cuePreview = false;
+  private loopActive = false;
+  private loopStart: number | null = null;
+  private loopEnd: number | null = null;
   private syncActive = false;
   private tempoRange: number = TEMPO_RANGES[0];
   private lastTempoFaderValue = 0.5;
@@ -239,6 +244,7 @@ export class Deck {
   }
 
   togglePlay() {
+    this.cuePreview = false; // un press esplicito su PLAY "consolida" un'eventuale anteprima da CUE in corso
     if (this.isPlaying()) this.pause();
     else this.play();
   }
@@ -251,24 +257,40 @@ export class Deck {
 
   /**
    * CUE: se il deck sta suonando, torna al cue point salvato e mette in
-   * pausa. Se è fermo e non c'è ancora un cue point, lo imposta qui; se
-   * c'è già, ci salta. Il LED (vedi getSnapshot -> cuePointSet) resta
-   * acceso finché un cue point è memorizzato, non solo mentre premi.
+   * pausa (Back Cue). Se è fermo e non c'è ancora un cue point, lo imposta
+   * qui. Se c'è già un cue point ed è fermo, tenere premuto fa partire la
+   * riproduzione in anteprima (Cue Point Sampler): richiamare cue(false) al
+   * rilascio per tornare al cue point e fermarsi. Se nel frattempo si preme
+   * PLAY, l'anteprima "si consolida" in riproduzione vera (vedi togglePlay).
    */
-  cue() {
+  cue(pressed = true) {
+    if (!pressed) {
+      if (this.cuePreview) {
+        this.seekTo(this.cuePoint ?? this.trimStart ?? 0);
+        this.pause();
+        this.cuePreview = false;
+        this.notify();
+      }
+      return;
+    }
+
     if (this.isPlaying()) {
       this.seekTo(this.cuePoint ?? this.trimStart ?? 0);
       this.pause();
+      this.cuePreview = false;
     } else if (this.cuePoint == null) {
       this.cuePoint = this.getCurrentTime();
     } else {
       this.seekTo(this.cuePoint);
+      this.play();
+      this.cuePreview = true;
     }
     this.notify();
   }
 
   /** SHIFT + CUE: torna sempre all'inizio della traccia (non al cue point) */
   goToStart() {
+    this.cuePreview = false;
     this.seekTo(0);
     this.pause();
     this.notify();
@@ -318,6 +340,7 @@ export class Deck {
     this.trimFadeGain.gain.value = this.fadeInEnabled ? 0 : 1;
     this.cuePoint = trim.start; // il punto di inizio personalizzato è anche il cue point iniziale
     this.syncActive = false;
+    this.clearLoop();
 
     if (this.trimTimer != null) clearInterval(this.trimTimer);
     this.trimTimer = setInterval(() => this.tickTrim(), 100);
@@ -327,6 +350,11 @@ export class Deck {
     if (this.sourceType == null) return;
     const t = this.getCurrentTime();
     const now = this.ctx.currentTime;
+
+    // Beat Loop: torna al punto di inizio del loop appena si raggiunge la fine
+    if (this.loopActive && this.loopEnd != null && this.isPlaying() && t >= this.loopEnd) {
+      this.seekTo(this.loopStart ?? 0);
+    }
 
     // Fine personalizzata raggiunta: si comporta come una fine naturale (avanza la coda)
     if (this.trimEnd != null && this.isPlaying() && t >= this.trimEnd) {
@@ -348,6 +376,32 @@ export class Deck {
       if (remaining < this.fadeDuration) gain = Math.min(gain, Math.max(0, remaining / this.fadeDuration));
     }
     this.trimFadeGain.gain.setTargetAtTime(gain, now, 0.05);
+  }
+
+  /**
+   * Beat Loop: imposta un loop di N battute a partire dalla posizione
+   * attuale, calcolato dal BPM del brano (passato dall'esterno, perché il
+   * rilevamento BPM vive nella libreria, non nel deck). Richiamare di nuovo
+   * con lo stesso pad per uscire dal loop (gestito lato UI/App).
+   */
+  setBeatLoop(beats: number, bpm: number) {
+    const secondsPerBeat = 60 / bpm;
+    const start = this.getCurrentTime();
+    this.loopStart = start;
+    this.loopEnd = start + beats * secondsPerBeat;
+    this.loopActive = true;
+    this.notify();
+  }
+
+  clearLoop() {
+    this.loopActive = false;
+    this.loopStart = null;
+    this.loopEnd = null;
+    this.notify();
+  }
+
+  isLoopActive(): boolean {
+    return this.loopActive;
   }
 
   // --- controlli dal mixer ---
@@ -492,6 +546,7 @@ export class Deck {
       cuePointSet: this.cuePoint != null,
       syncActive: this.syncActive,
       tempoRange: this.tempoRange,
+      loopActive: this.loopActive,
       hotCues,
       playbackRate: this.getPlaybackRate(),
     };

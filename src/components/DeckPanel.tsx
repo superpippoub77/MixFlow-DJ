@@ -369,7 +369,31 @@ function Fader({ label, value, color, onChange, id }: { label: string; value: nu
   );
 }
 
-function PadGrid({ active, color, onPad, padOneId }: { active: Record<number, boolean>; color: string; onPad: (pad: number) => void; padOneId?: string }) {
+const BEAT_LOOP_LABELS = ['1/16', '1/8', '1/4', '1/2', '1', '2', '4', '8'];
+
+function PadGrid({
+  active,
+  color,
+  onPad,
+  padOneId,
+  padMode,
+  onTogglePadMode,
+  loopActive,
+  bpmKnown,
+  deck,
+  testActive,
+}: {
+  active: Record<number, boolean>;
+  color: string;
+  onPad: (pad: number) => void;
+  padOneId?: string;
+  padMode: 'hotcue' | 'beatloop';
+  onTogglePadMode: () => void;
+  loopActive: boolean;
+  bpmKnown: boolean;
+  deck: 1 | 2;
+  testActive: string | null;
+}) {
   const [flashingPad, setFlashingPad] = useState<number | null>(null);
 
   function handlePadClick(pad: number) {
@@ -380,13 +404,36 @@ function PadGrid({ active, color, onPad, padOneId }: { active: Record<number, bo
 
   return (
     <Box>
-      <Typography variant="caption" sx={{ opacity: 0.5, fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.1em', mb: 0.5, display: 'block' }}>
-        PERFORMANCE PADS
-      </Typography>
+      <Box display="flex" alignItems="center" justifyContent="space-between" mb={0.5}>
+        <Typography variant="caption" sx={{ opacity: 0.5, fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.1em' }}>
+          PERFORMANCE PADS
+        </Typography>
+        <Box
+          onClick={onTogglePadMode}
+          sx={{
+            px: 0.8,
+            py: 0.15,
+            borderRadius: 0.5,
+            fontSize: 9,
+            fontFamily: 'JetBrains Mono, monospace',
+            border: `1px solid ${color}`,
+            color,
+            cursor: 'pointer',
+          }}
+        >
+          {padMode === 'hotcue' ? 'HOT CUE' : 'BEAT LOOP'}
+        </Box>
+      </Box>
+      {padMode === 'beatloop' && !bpmKnown && (
+        <Typography variant="caption" sx={{ opacity: 0.5, fontSize: 9, display: 'block', mb: 0.5 }}>
+          Serve il BPM (solo file locali) per calcolare la durata del loop.
+        </Typography>
+      )}
       <Box display="grid" gridTemplateColumns="repeat(4, 1fr)" gap={0.75}>
         {[1, 2, 3, 4, 5, 6, 7, 8].map((pad) => {
-          const isSet = active[pad];
+          const isSet = padMode === 'hotcue' ? active[pad] || testActive === `${deck}-pad-${pad}` : loopActive || testActive === `${deck}-pad-${pad}`;
           const isFlashing = flashingPad === pad;
+          const label = padMode === 'hotcue' ? pad : BEAT_LOOP_LABELS[pad - 1];
           return (
             <Box
               key={pad}
@@ -402,10 +449,11 @@ function PadGrid({ active, color, onPad, padOneId }: { active: Record<number, bo
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
+                opacity: padMode === 'beatloop' && !bpmKnown ? 0.4 : 1,
               }}
             >
               <Typography variant="caption" sx={{ fontSize: 10, opacity: isSet || isFlashing ? 1 : 0.4, color: isSet || isFlashing ? '#111' : undefined }}>
-                {pad}
+                {label}
               </Typography>
             </Box>
           );
@@ -465,7 +513,7 @@ export function DeckPanel(props: {
   queue: QueueEntry[];
   syncAvailable: boolean;
   onPlay: () => void;
-  onCue: () => void;
+  onCue: (pressed: boolean) => void;
   onSeek: (fraction: number) => void;
   onJumpToTime: (seconds: number) => void;
   onEQChange: (band: 'low' | 'mid' | 'high', value: number) => void;
@@ -476,11 +524,15 @@ export function DeckPanel(props: {
   onToggleShift: () => void;
   onSync: () => void;
   onCycleTempoRange: () => void;
+  testActive: string | null;
   onSkipNext: () => void;
   onRemoveQueueItem: (id: string) => void;
   onMoveQueueItem: (id: string, direction: 'up' | 'down') => void;
   onReorderQueueDrop: (draggedId: string, targetId: string) => void;
   onHotCue: (pad: number) => void;
+  padMode: 'hotcue' | 'beatloop';
+  onTogglePadMode: () => void;
+  onBeatLoop: (pad: number) => void;
 }) {
   const {
     deck,
@@ -505,11 +557,15 @@ export function DeckPanel(props: {
     onToggleShift,
     onSync,
     onCycleTempoRange,
+    testActive,
     onSkipNext,
     onRemoveQueueItem,
     onMoveQueueItem,
     onReorderQueueDrop,
     onHotCue,
+    padMode,
+    onTogglePadMode,
+    onBeatLoop,
   } = props;
   const v = (name: string) => {
     if (values[`${deck}.${name}`] != null) return values[`${deck}.${name}`];
@@ -523,6 +579,7 @@ export function DeckPanel(props: {
   };
   const pressed = (name: string) => (values[`${deck}.${name}`] ?? 0) > 0;
   const filterValue = values[`master.filter_deck${deck}`] ?? 0.5;
+  const lit = (actual: boolean, key: string) => actual || testActive === `${deck}-${key}`;
   const [jogPressed, setJogPressed] = useState(false);
   const [playFlash, setPlayFlash] = useState(false);
 
@@ -611,7 +668,7 @@ export function DeckPanel(props: {
             <RoundButton
               id={deck === 1 ? 'tid-deck1-sync' : undefined}
               label="BEAT SYNC"
-              active={track.syncActive}
+              active={lit(track.syncActive, 'sync')}
               color={color}
               size={30}
               onClick={syncAvailable ? onSync : undefined}
@@ -625,20 +682,22 @@ export function DeckPanel(props: {
           <Box display="flex" gap={1}>
             <Box
               id={deck === 1 ? 'tid-deck1-cue' : undefined}
-              onClick={onCue}
+              onPointerDown={() => onCue(true)}
+              onPointerUp={() => onCue(false)}
+              onPointerLeave={() => onCue(false)}
               sx={{
                 width: 46,
                 height: 46,
                 borderRadius: '50%',
-                border: `2px solid ${track.cuePointSet ? color : '#2b2f37'}`,
-                background: track.cuePointSet ? color : '#181b20',
+                border: `2px solid ${lit(track.cuePointSet, 'cue') ? color : '#2b2f37'}`,
+                background: lit(track.cuePointSet, 'cue') ? color : '#181b20',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
                 fontSize: 10,
                 fontFamily: 'JetBrains Mono, monospace',
-                color: track.cuePointSet ? '#111' : '#8b909c',
+                color: lit(track.cuePointSet, 'cue') ? '#111' : '#8b909c',
                 transition: 'background 60ms, border-color 60ms',
               }}
             >
@@ -651,13 +710,13 @@ export function DeckPanel(props: {
                 width: 46,
                 height: 46,
                 borderRadius: '50%',
-                border: `2px solid ${track.playing || playFlash ? color : '#2b2f37'}`,
-                background: track.playing || playFlash ? color : '#181b20',
+                border: `2px solid ${lit(track.playing || playFlash, 'play') ? color : '#2b2f37'}`,
+                background: lit(track.playing || playFlash, 'play') ? color : '#181b20',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
-                color: track.playing || playFlash ? '#111' : color,
+                color: lit(track.playing || playFlash, 'play') ? '#111' : color,
               }}
             >
               {track.playing ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" />}
@@ -670,13 +729,13 @@ export function DeckPanel(props: {
               width: 30,
               height: 30,
               borderRadius: '50%',
-              border: `1.5px solid ${track.cueActive ? color : '#2b2f37'}`,
-              background: track.cueActive ? color : '#181b20',
+              border: `1.5px solid ${lit(track.cueActive, 'headphone') ? color : '#2b2f37'}`,
+              background: lit(track.cueActive, 'headphone') ? color : '#181b20',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
-              color: track.cueActive ? '#111' : '#8b909c',
+              color: lit(track.cueActive, 'headphone') ? '#111' : '#8b909c',
             }}
           >
             <HeadphonesIcon sx={{ fontSize: 16 }} />
@@ -699,7 +758,18 @@ export function DeckPanel(props: {
         {/* Volume + pad, occupano lo spazio restante */}
         <Box flex={1} minWidth={180} display="flex" flexDirection="column" gap={1.5}>
           <Fader id={deck === 1 ? 'tid-deck1-volume' : undefined} label="VOLUME" value={v('volume')} color={color} onChange={onVolumeChange} />
-          <PadGrid active={track.hotCues} color={color} onPad={onHotCue} padOneId={deck === 1 ? 'tid-deck1-pad1' : undefined} />
+          <PadGrid
+            active={track.hotCues}
+            color={color}
+            onPad={padMode === 'hotcue' ? onHotCue : onBeatLoop}
+            padOneId={deck === 1 ? 'tid-deck1-pad1' : undefined}
+            padMode={padMode}
+            onTogglePadMode={onTogglePadMode}
+            loopActive={track.loopActive}
+            bpmKnown={bpm != null}
+            deck={deck}
+            testActive={testActive}
+          />
         </Box>
       </Box>
     </Paper>

@@ -18,6 +18,46 @@ import { MixRecorder } from './audio/recorder';
 import { DEFAULT_TRIM, TEMPO_RANGES, type TrimSettings } from './audio/deck';
 import { palette } from './theme';
 
+const BEAT_LOOP_VALUES = [1 / 16, 1 / 8, 1 / 4, 1 / 2, 1, 2, 4, 8];
+
+// Sequenza del "test luci": accende ciascun indicatore per un momento, uno alla
+// volta, così puoi verificare che ogni elemento si illumini correttamente
+// senza dover toccare il controller fisico o l'audio reale.
+const TEST_SEQUENCE: string[] = [
+  '1-play',
+  '1-cue',
+  '1-sync',
+  '1-headphone',
+  ...[1, 2, 3, 4, 5, 6, 7, 8].map((p) => `1-pad-${p}`),
+  '2-play',
+  '2-cue',
+  '2-sync',
+  '2-headphone',
+  ...[1, 2, 3, 4, 5, 6, 7, 8].map((p) => `2-pad-${p}`),
+  'master-cue',
+  'master-automix',
+  'master-transition',
+];
+
+function describeTestStep(key: string | null): string {
+  if (!key) return '';
+  const [deckPart, ...rest] = key.split('-');
+  const control = rest.join('-');
+  const deckLabel = deckPart === 'master' ? 'Master' : `Deck ${deckPart}`;
+  const controlLabels: Record<string, string> = {
+    play: 'PLAY',
+    cue: 'CUE',
+    sync: 'BEAT SYNC',
+    headphone: 'CUFFIA',
+    automix: 'AUTOMIX',
+    transition: 'TRANSITION FX',
+  };
+  if (key === 'master-cue') return 'Master · MASTER CUE';
+  const padMatch = control.match(/^pad-(\d)$/);
+  if (padMatch) return `${deckLabel} · PAD ${padMatch[1]}`;
+  return `${deckLabel} · ${controlLabels[control] ?? control.toUpperCase()}`;
+}
+
 type QueueItem =
   | { id: string; source: 'local'; file: File; title: string }
   | { id: string; source: 'youtube'; videoId: string; title: string };
@@ -87,6 +127,27 @@ export default function App() {
   const { engine, snapshots } = useAudioEngine(ddj.onEvent, bpms);
   const { values, setManual } = useManualOverrides(ddj.onEvent, ddj.values);
   const [queues, setQueues] = useState<Record<1 | 2, QueueItem[]>>({ 1: [], 2: [] });
+  const [padMode, setPadMode] = useState<Record<1 | 2, 'hotcue' | 'beatloop'>>({ 1: 'hotcue', 2: 'hotcue' });
+  const [transitionArmed, setTransitionArmed] = useState(false);
+  const transitionArmValueRef = useRef(0.5);
+  const [testActive, setTestActive] = useState<string | null>(null);
+  const [testRunning, setTestRunning] = useState(false);
+
+  function runLightTest() {
+    if (testRunning) return;
+    setTestRunning(true);
+    let i = 0;
+    const interval = window.setInterval(() => {
+      if (i >= TEST_SEQUENCE.length) {
+        window.clearInterval(interval);
+        setTestActive(null);
+        setTestRunning(false);
+        return;
+      }
+      setTestActive(TEST_SEQUENCE[i]);
+      i++;
+    }, 350);
+  }
   const [trackSettings, setTrackSettings] = useState<Record<string, TrimSettings>>(() => {
     try {
       const saved = localStorage.getItem('mixflowdj_track_settings');
@@ -140,6 +201,39 @@ export default function App() {
   function handleCrossfaderChange(value: number) {
     engine.setCrossfader(value);
     setManual('master.crossfader', value);
+    if (transitionArmed) applyTransitionFx(value);
+  }
+
+  function applyTransitionFx(value: number) {
+    const start = transitionArmValueRef.current;
+    const direction = value >= start ? 1 : -1;
+    const targetExtreme = direction === 1 ? 1 : 0;
+    const span = Math.abs(targetExtreme - start) || 1;
+    const progress = Math.min(1, Math.abs(value - start) / span);
+    const outgoingDeck: 1 | 2 = direction === 1 ? 1 : 2;
+    const incomingDeck: 1 | 2 = outgoingDeck === 1 ? 2 : 1;
+
+    if (transitionStyle === 'filter_sweep') {
+      engine.decks[outgoingDeck].setFilter(0.5 - progress * 0.5);
+      engine.decks[incomingDeck].setFilter(0.5);
+    } else if (transitionStyle === 'echo_out') {
+      engine.fx.setEchoAmount(progress);
+    }
+    // 'crossfade' e 'cut' non aggiungono un effetto extra qui: il crossfade
+    // normale (già applicato da engine.setCrossfader) è sufficiente.
+  }
+
+  function handleToggleTransitionArm() {
+    if (transitionArmed) {
+      // disarma: ripristina eventuali FX applicati a metà transizione
+      engine.decks[1].setFilter(0.5);
+      engine.decks[2].setFilter(0.5);
+      engine.fx.setEchoAmount(0);
+      setTransitionArmed(false);
+    } else {
+      transitionArmValueRef.current = values['master.crossfader'] ?? 0.5;
+      setTransitionArmed(true);
+    }
   }
 
   const automix = useAutoMix(engine, snapshots, bpms, handleCrossfaderChange, transitionStyle);
@@ -156,9 +250,24 @@ export default function App() {
     engine.resume();
     engine.decks[deck].togglePlay();
   }
-  function handleCue(deck: 1 | 2) {
+  function handleCue(deck: 1 | 2, pressed: boolean) {
     engine.resume();
-    engine.decks[deck].cue();
+    engine.decks[deck].cue(pressed);
+  }
+  function handleTogglePadMode(deck: 1 | 2) {
+    setPadMode((prev) => ({ ...prev, [deck]: prev[deck] === 'hotcue' ? 'beatloop' : 'hotcue' }));
+  }
+  function handleBeatLoop(deck: 1 | 2, pad: number) {
+    engine.resume();
+    const d = engine.decks[deck];
+    if (d.isLoopActive()) {
+      d.clearLoop();
+      return;
+    }
+    const bpm = bpms[deck];
+    if (!bpm) return; // serve il BPM (solo file locali) per calcolare la durata del loop
+    const beats = BEAT_LOOP_VALUES[pad - 1];
+    d.setBeatLoop(beats, bpm * d.getPlaybackRate());
   }
   function handleSeek(deck: 1 | 2, fraction: number) {
     const duration = engine.decks[deck].getDuration();
@@ -305,6 +414,9 @@ export default function App() {
             onSelectInput={ddj.selectInput}
             onInfoClick={() => setInfoOpen(true)}
             onTutorialClick={() => setTutorialOpen(true)}
+            onTestClick={runLightTest}
+            testRunning={testRunning}
+            testLabel={describeTestStep(testActive)}
           />
         </Paper>
 
@@ -336,7 +448,7 @@ export default function App() {
               queue={queues[1].map(({ id, title, source }): QueueEntry => ({ id, title, source }))}
               syncAvailable={!!bpms[1] && !!bpms[2]}
               onPlay={() => handlePlay(1)}
-              onCue={() => handleCue(1)}
+              onCue={(pressed) => handleCue(1, pressed)}
               onSeek={(fraction) => handleSeek(1, fraction)}
               onJumpToTime={(seconds) => handleJumpToTime(1, seconds)}
               onEQChange={(band, val) => handleEQChange(1, band, val)}
@@ -347,11 +459,15 @@ export default function App() {
               onToggleShift={() => handleToggleShift(1)}
               onSync={() => handleSync(1)}
               onCycleTempoRange={() => handleCycleTempoRange(1)}
+              testActive={testActive}
               onSkipNext={() => advanceQueue(1)}
               onRemoveQueueItem={(id) => handleRemoveFromQueue(1, id)}
               onMoveQueueItem={(id, dir) => handleMoveQueueItem(1, id, dir)}
               onReorderQueueDrop={(draggedId, targetId) => handleReorderQueueDrop(1, draggedId, targetId)}
               onHotCue={(pad) => handleHotCue(1, pad)}
+              padMode={padMode[1]}
+              onTogglePadMode={() => handleTogglePadMode(1)}
+              onBeatLoop={(pad) => handleBeatLoop(1, pad)}
             />
           </Box>
 
@@ -368,6 +484,9 @@ export default function App() {
               onToggleMasterCue={handleToggleMasterCue}
               cueDeviceSupported={engine.cueMonitor.supportsDeviceSelection()}
               onSelectCueDevice={handleSelectCueDevice}
+              transitionArmed={transitionArmed}
+              onToggleTransitionArm={handleToggleTransitionArm}
+              testActive={testActive}
             />
           </Box>
 
@@ -384,7 +503,7 @@ export default function App() {
               queue={queues[2].map(({ id, title, source }): QueueEntry => ({ id, title, source }))}
               syncAvailable={!!bpms[1] && !!bpms[2]}
               onPlay={() => handlePlay(2)}
-              onCue={() => handleCue(2)}
+              onCue={(pressed) => handleCue(2, pressed)}
               onSeek={(fraction) => handleSeek(2, fraction)}
               onJumpToTime={(seconds) => handleJumpToTime(2, seconds)}
               onEQChange={(band, val) => handleEQChange(2, band, val)}
@@ -395,11 +514,15 @@ export default function App() {
               onToggleShift={() => handleToggleShift(2)}
               onSync={() => handleSync(2)}
               onCycleTempoRange={() => handleCycleTempoRange(2)}
+              testActive={testActive}
               onSkipNext={() => advanceQueue(2)}
               onRemoveQueueItem={(id) => handleRemoveFromQueue(2, id)}
               onMoveQueueItem={(id, dir) => handleMoveQueueItem(2, id, dir)}
               onReorderQueueDrop={(draggedId, targetId) => handleReorderQueueDrop(2, draggedId, targetId)}
               onHotCue={(pad) => handleHotCue(2, pad)}
+              padMode={padMode[2]}
+              onTogglePadMode={() => handleTogglePadMode(2)}
+              onBeatLoop={(pad) => handleBeatLoop(2, pad)}
             />
           </Box>
         </Box>

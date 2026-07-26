@@ -70,8 +70,8 @@ export function useAudioEngine(onEvent: (cb: (e: DDJ200Event) => void) => () => 
       if (event.kind === 'button' && event.control === 'play' && event.pressed) {
         engine.decks[deck].togglePlay();
       }
-      if (event.kind === 'button' && event.control === 'cue' && event.pressed) {
-        engine.decks[deck].cue();
+      if (event.kind === 'button' && event.control === 'cue') {
+        engine.decks[deck].cue(event.pressed);
       }
       if (event.kind === 'button' && event.control === 'cue_goto_and_stop' && event.pressed) {
         // SHIFT + CUE: torna sempre all'inizio della traccia (non al cue point salvato)

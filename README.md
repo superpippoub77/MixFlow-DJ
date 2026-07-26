@@ -441,6 +441,42 @@ il trascinamento segue il cursore in modo continuo e lineare.
 
 
 
+## Cue Point Sampler
+
+Tenendo premuto CUE (da fermo, con un cue point già impostato), il brano
+suona in anteprima finché tieni premuto; al rilascio torna al cue point e si
+ferma. Se nel frattempo premi PLAY, l'anteprima "si consolida" in
+riproduzione vera e il rilascio di CUE non la interrompe più. Da mouse:
+premi e tieni il pulsante CUE (non un semplice click).
+
+## Beat Loop sui pad
+
+I Performance Pad ora hanno due modalità, selezionabili con l'etichetta
+HOT CUE / BEAT LOOP sopra la griglia: in modalità Beat Loop, gli 8 pad
+diventano lunghezze fisse (1/16, 1/8, 1/4, 1/2, 1, 2, 4, 8 battute) calcolate
+dal BPM rilevato (solo file locali). Premere un pad avvia un loop di quella
+lunghezza dalla posizione attuale; premere di nuovo un pad mentre un loop è
+attivo lo disattiva. Il pad si illumina finché il loop è attivo.
+
+## Transition FX guidato dal crossfader
+
+Oltre all'AUTOMIX (automatico a timer), ora c'è un secondo controllo
+separato, **TRANSITION FX**, più fedele al comportamento hardware reale: lo
+"armi" con un click, poi sei tu a trascinare il crossfader — lo stile scelto
+(filter sweep o echo out) si applica in proporzione a quanto ti allontani dal
+punto in cui hai armato, sul deck da cui ti stai allontanando. Disarmando si
+azzerano eventuali FX rimasti a metà.
+
+## Pulsante Test luci
+
+L'icona 🧪 accanto a Info e Tutorial accende, uno alla volta, ogni indicatore
+dell'interfaccia (Play/Cue/Sync/Cuffia/8 pad per deck, Master Cue, Automix,
+Transition FX) per verificare che si illumini correttamente — indipendente
+da MIDI o audio reale, utile per isolare se un problema è nella UI o nella
+mappatura del controller fisico.
+
+
+
 ## Mappa MIDI (riassunto)
 
 | Controllo | Canale/Status | Note/CC |

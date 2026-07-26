@@ -2,6 +2,7 @@ import { Box, Button, Chip, MenuItem, Select, Typography, IconButton, Tooltip } 
 import UsbIcon from '@mui/icons-material/Usb';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import SchoolIcon from '@mui/icons-material/School';
+import ScienceIcon from '@mui/icons-material/Science';
 import type { ConnectionStatus, MidiInputInfo } from '../midi/useDDJ200';
 
 const STATUS_LABEL: Record<ConnectionStatus, string> = {
@@ -31,8 +32,12 @@ export function StatusBar(props: {
   onSelectInput: (id: string) => void;
   onInfoClick: () => void;
   onTutorialClick: () => void;
+  onTestClick: () => void;
+  testRunning: boolean;
+  testLabel: string;
 }) {
-  const { status, error, inputs, selectedInputId, onConnect, onSelectInput, onInfoClick, onTutorialClick } = props;
+  const { status, error, inputs, selectedInputId, onConnect, onSelectInput, onInfoClick, onTutorialClick, onTestClick, testRunning, testLabel } =
+    props;
 
   return (
     <Box display="flex" alignItems="center" gap={2} flexWrap="wrap">
@@ -49,6 +54,14 @@ export function StatusBar(props: {
             <SchoolIcon fontSize="small" />
           </IconButton>
         </Tooltip>
+        <Tooltip title="Test luci: accende ogni indicatore in sequenza per verificarlo">
+          <IconButton size="small" onClick={onTestClick} disabled={testRunning} sx={{ opacity: 0.7 }}>
+            <ScienceIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+        {testRunning && (
+          <Chip size="small" label={`Test: ${testLabel}`} color="warning" variant="outlined" />
+        )}
       </Box>
 
       <Chip size="small" label={STATUS_LABEL[status]} color={STATUS_COLOR[status]} variant="outlined" />

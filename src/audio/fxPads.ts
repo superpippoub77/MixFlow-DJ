@@ -155,6 +155,12 @@ export class FxEngine {
     this.wetGain.gain.setTargetAtTime(this.echoActive ? 0.45 : 0, this.ctx.currentTime, 0.05);
   }
 
+  /** Controllo continuo (0..1) dell'eco, usato dal Transition FX guidato dal crossfader */
+  setEchoAmount(amount: number) {
+    this.echoActive = amount > 0.01;
+    this.wetGain.gain.setTargetAtTime(Math.max(0, Math.min(1, amount)) * 0.45, this.ctx.currentTime, 0.03);
+  }
+
   isEchoActive(): boolean {
     return this.echoActive;
   }
