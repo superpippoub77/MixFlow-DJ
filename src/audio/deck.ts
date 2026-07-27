@@ -55,6 +55,13 @@ export class Deck {
   private volumeGain: GainNode;
   private cueTap: GainNode;
 
+  // --- vero motore di scratch (bidirezionale, con audio reale anche all'indietro) ---
+  private buffer: AudioBuffer | null = null; // copia decodificata del brano, usata solo per lo scratch
+  private scratchNode: AudioBufferSourceNode | null = null;
+  private scratchPosition = 0;
+  private wasPlayingBeforeScratch = false;
+  private pitchBendTimer: ReturnType<typeof setTimeout> | null = null;
+
   // --- YouTube ---
   private ytPlayer: any = null;
   private ytReady = false;
@@ -188,6 +195,19 @@ export class Deck {
     this.title = file.name;
     this.resetHotCues();
     this.applyTrim(trim);
+    this.buffer = null;
+    // Decodifica in background una copia del brano: serve solo per il vero
+    // motore di scratch (bidirezionale), non influisce sulla riproduzione
+    // normale che resta sull'elemento <audio> in streaming.
+    file
+      .arrayBuffer()
+      .then((data) => this.ctx.decodeAudioData(data))
+      .then((decoded) => {
+        this.buffer = decoded;
+      })
+      .catch(() => {
+        this.buffer = null; // se la decodifica fallisce, lo scratch resta silenzioso ma il resto funziona normalmente
+      });
     this.notify();
   }
 
@@ -298,6 +318,81 @@ export class Deck {
 
   seekBy(deltaSeconds: number) {
     this.seekTo(this.getCurrentTime() + deltaSeconds);
+  }
+
+  /**
+   * Vero motore di scratch: mette in pausa l'elemento <audio> normale e fa
+   * partire una copia del brano già decodificata (AudioBuffer) attraverso un
+   * AudioBufferSourceNode, la cui velocità/verso viene aggiornata in tempo
+   * reale — inclusi valori negativi per suonare davvero all'indietro, non
+   * solo "saltare" nella posizione. Funziona solo sui file locali (serve la
+   * copia decodificata) e solo su browser che supportano playbackRate
+   * negativo sugli AudioBufferSourceNode (Chrome/Edge/Opera); altrove il
+   * suono resta silenzioso durante lo scratch ma la posizione si aggiorna
+   * comunque correttamente.
+   */
+  startScratch() {
+    if (this.sourceType !== 'local' || !this.buffer) return;
+    this.wasPlayingBeforeScratch = this.isPlaying();
+    this.audioEl?.pause();
+    this.scratchPosition = this.getCurrentTime();
+
+    const node = this.ctx.createBufferSource();
+    node.buffer = this.buffer;
+    node.connect(this.lowFilter); // stessa catena EQ/filtro/volume del deck
+    try {
+      node.playbackRate.value = 0;
+    } catch {
+      // ignorato: alcuni browser non accettano 0, ripartiamo comunque al primo scratchBy
+    }
+    node.start(0, Math.max(0, Math.min(this.scratchPosition, this.buffer.duration - 0.001)));
+    this.scratchNode = node;
+  }
+
+  /** Chiamato ripetutamente mentre si "gira il piatto": aggiorna posizione e suono in tempo reale */
+  scratchBy(deltaSeconds: number, rate: number) {
+    if (!this.scratchNode || !this.buffer) return;
+    this.scratchPosition = Math.max(0, Math.min(this.scratchPosition + deltaSeconds, this.buffer.duration));
+    try {
+      this.scratchNode.playbackRate.setTargetAtTime(rate, this.ctx.currentTime, 0.015);
+    } catch {
+      // browser che non supporta rate negativo: il movimento resta silenzioso ma la posizione avanza comunque
+    }
+    this.notify();
+  }
+
+  /** Rilasci il piatto: torna alla riproduzione normale dalla posizione raggiunta durante lo scratch */
+  endScratch() {
+    if (this.scratchNode) {
+      try {
+        this.scratchNode.stop();
+      } catch {
+        // già fermato
+      }
+      this.scratchNode.disconnect();
+      this.scratchNode = null;
+    }
+    if (this.audioEl) {
+      this.audioEl.currentTime = this.scratchPosition;
+      if (this.wasPlayingBeforeScratch) this.audioEl.play();
+    }
+    this.notify();
+  }
+
+  /**
+   * Pitch bend dell'anello esterno del jog: una spinta temporanea di
+   * velocità sulla riproduzione normale (non lo scratch), che torna da sola
+   * al tempo impostato appena smetti di girare.
+   */
+  pitchBend(delta: number) {
+    if (this.sourceType !== 'local' || !this.audioEl) return;
+    const bend = Math.max(-0.15, Math.min(0.15, delta * 0.015));
+    const baseRate = 1 + (this.lastTempoFaderValue - 0.5) * 2 * this.tempoRange;
+    this.audioEl.playbackRate = Math.max(0.25, baseRate + bend);
+    if (this.pitchBendTimer) clearTimeout(this.pitchBendTimer);
+    this.pitchBendTimer = setTimeout(() => {
+      if (this.audioEl) this.audioEl.playbackRate = baseRate;
+    }, 120);
   }
 
   seekTo(t: number) {

@@ -477,6 +477,67 @@ mappatura del controller fisico.
 
 
 
+## Tastiera come mixer (nessun controller richiesto)
+
+Nuovo pannello "Tastiera come mixer" con schema colorato completo. **CTRL,
+SHIFT e ALT sinistro/destro sono riconosciuti separatamente** (tramite
+`event.code`), per poter puntare un deck specifico senza dover prima
+premere TAB:
+
+- **TAB** — alterna il deck attivo (1 ↔ 2): il deck evidenziato con un bordo
+  colorato riceve i comandi che dipendono dal deck attivo
+- **CTRL sinistro** — Cue Deck 1 diretto; **CTRL destro** — Cue Deck 2
+  diretto (tieni premuto per l'anteprima, Cue Point Sampler); **⌫/Invio** —
+  Cue sul deck attivo (in aggiunta, stesso risultato)
+- **SPAZIO** — Play/Pausa (deck attivo)
+- **SHIFT sinistro+⌫/Invio** — Deck 1 torna all'inizio; **SHIFT
+  destro+⌫/Invio** — Deck 2 torna all'inizio
+- **1-8** — hot cue (deck attivo); **SHIFT sinistro+1-8** — cancella hot cue
+  su Deck 1; **SHIFT destro+1-8** — cancella hot cue su Deck 2
+- **S** — Beat Sync on/off (deck attivo); **ALT sinistro+S** — cambia range
+  pitch Deck 1; **ALT destro+S** — cambia range pitch Deck 2
+- **H** — preascolto in cuffia on/off (deck attivo)
+- **← →** — crossfader (sempre attivo, non serve TAB); **↑ ↓** — volume del
+  deck attivo; **CTRL (uno dei due)+↑/↓** — tempo del deck attivo;
+  **ALT (uno dei due)+↑/↓** — filtro/CFX del deck attivo
+- **Q/A** — EQ alti su/giù (deck attivo); **E/D** — EQ medi su/giù;
+  **R/F** — EQ bassi su/giù
+- **HOME** (tenuto premuto) — scratch all'indietro; **END** (tenuto premuto)
+  — scratch in avanti (deck attivo)
+
+I comandi si disattivano automaticamente mentre scrivi in un campo di testo
+(es. ricerca YouTube), per non interferire con la digitazione. Implementato
+in `src/audio/useKeyboardMixer.ts`.
+
+## Vero motore di scratch (audio reale, non solo un salto)
+
+Prima, "scratchare" il jog wheel spostava semplicemente la posizione di
+riproduzione (suonava come un salto avanti/indietro, non un vero scratch).
+Ora i file locali usano un secondo motore audio dedicato
+(`AudioBufferSourceNode`, vedi `startScratch`/`scratchBy`/`endScratch` in
+`src/audio/deck.ts`): mentre "tieni il piatto", l'elemento `<audio>` normale
+va in pausa e una copia già decodificata del brano suona in tempo reale con
+velocità/verso aggiornati continuamente — **incluso il verso indietro**, un
+vero suono di scratch, non solo un cambio di posizione. Al rilascio, la
+riproduzione normale riprende esattamente da dove sei arrivato.
+
+Limiti onesti:
+- Richiede che il file sia già stato decodificato in background (istantaneo
+  per brani brevi, un momento in più per file molto lunghi appena caricati)
+- Il playback rate negativo (suono vero all'indietro) è supportato in modo
+  affidabile su Chrome/Edge/Opera; su browser che non lo supportano lo
+  scratch resta silenzioso durante il movimento ma la posizione si aggiorna
+  comunque correttamente
+- Non disponibile su YouTube (stesso limite di sempre: nessun accesso
+  all'audio grezzo)
+
+L'anello esterno del jog (pitch bend, senza toccare il piatto) è stato
+separato correttamente dallo scratch vero: dà una spinta temporanea di
+velocità sulla riproduzione normale, che torna da sola al tempo impostato
+appena smetti di girare — invece di essere trattato come uno scratch.
+
+
+
 ## Mappa MIDI (riassunto)
 
 | Controllo | Canale/Status | Note/CC |

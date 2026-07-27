@@ -17,9 +17,10 @@ export function useAudioEngine(onEvent: (cb: (e: DDJ200Event) => void) => () => 
   // ignorare eventuali messaggi ripetuti mentre il tasto resta fisicamente
   // giù: altrimenti un controller che manda più note-on ravvicinate farebbe
   // alternare un interruttore più volte in un solo tocco, sembrando "incastrato".
-  const rawStateRef = useRef<{ headphoneCue: Record<1 | 2, boolean>; shift: Record<1 | 2, boolean> }>({
+  const rawStateRef = useRef<{ headphoneCue: Record<1 | 2, boolean>; shift: Record<1 | 2, boolean>; jogTouch: Record<1 | 2, boolean> }>({
     headphoneCue: { 1: false, 2: false },
     shift: { 1: false, 2: false },
+    jogTouch: { 1: false, 2: false },
   });
 
   const [snapshots, setSnapshots] = useState<Record<1 | 2, DeckSnapshot>>({
@@ -111,11 +112,24 @@ export function useAudioEngine(onEvent: (cb: (e: DDJ200Event) => void) => () => 
       if (event.kind === 'fader' && event.control === 'tempo') {
         engine.decks[deck].setTempo(event.value);
       }
+      if (event.kind === 'button' && event.control === 'jog_touch') {
+        rawStateRef.current.jogTouch[deck] = event.pressed;
+        if (event.pressed) engine.decks[deck].startScratch();
+        else engine.decks[deck].endScratch();
+      }
       if (event.kind === 'jog') {
         if (event.control === 'seek') {
           engine.decks[deck].seekBy(event.delta * 0.3); // SHIFT + jog: spostamento veloce
+        } else if (event.control === 'scratch') {
+          if (rawStateRef.current.jogTouch[deck]) {
+            // piatto toccato: vero scratch, audio reale anche all'indietro
+            engine.decks[deck].scratchBy(event.delta * 0.01, event.delta * 0.35);
+          } else {
+            engine.decks[deck].seekBy(event.delta * 0.02);
+          }
         } else {
-          engine.decks[deck].seekBy(event.delta * 0.02); // rotazione/scratch: nudge fine
+          // jog_rotation: anello esterno, pitch bend temporaneo (non tocca il piatto)
+          engine.decks[deck].pitchBend(event.delta);
         }
       }
     });

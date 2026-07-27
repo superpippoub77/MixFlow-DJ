@@ -533,6 +533,7 @@ export function DeckPanel(props: {
   padMode: 'hotcue' | 'beatloop';
   onTogglePadMode: () => void;
   onBeatLoop: (pad: number) => void;
+  focused: boolean;
 }) {
   const {
     deck,
@@ -566,6 +567,7 @@ export function DeckPanel(props: {
     padMode,
     onTogglePadMode,
     onBeatLoop,
+    focused,
   } = props;
   const v = (name: string) => {
     if (values[`${deck}.${name}`] != null) return values[`${deck}.${name}`];
@@ -595,7 +597,17 @@ export function DeckPanel(props: {
   }, [playRaw]);
 
   return (
-    <Paper sx={{ p: 2, flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+    <Paper
+      sx={{
+        p: 2,
+        flex: 1,
+        minWidth: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        border: focused ? `2px solid ${color}` : undefined,
+        transition: 'border-color 120ms',
+      }}
+    >
       <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
         <Typography variant="h6" sx={{ color }}>
           Deck {deck}

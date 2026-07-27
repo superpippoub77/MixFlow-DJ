@@ -16,6 +16,8 @@ import { TutorialOverlay } from './components/TutorialOverlay';
 import { detectBpm } from './audio/bpmDetect';
 import { MixRecorder } from './audio/recorder';
 import { DEFAULT_TRIM, TEMPO_RANGES, type TrimSettings } from './audio/deck';
+import { useKeyboardMixer } from './audio/useKeyboardMixer';
+import { KeyboardLegend } from './components/KeyboardLegend';
 import { palette } from './theme';
 
 const BEAT_LOOP_VALUES = [1 / 16, 1 / 8, 1 / 4, 1 / 2, 1, 2, 4, 8];
@@ -128,6 +130,9 @@ export default function App() {
   const { values, setManual } = useManualOverrides(ddj.onEvent, ddj.values);
   const [queues, setQueues] = useState<Record<1 | 2, QueueItem[]>>({ 1: [], 2: [] });
   const [padMode, setPadMode] = useState<Record<1 | 2, 'hotcue' | 'beatloop'>>({ 1: 'hotcue', 2: 'hotcue' });
+  const [focusedDeck, setFocusedDeck] = useState<1 | 2>(1);
+  const focusedDeckRef = useRef(focusedDeck);
+  focusedDeckRef.current = focusedDeck;
   const [transitionArmed, setTransitionArmed] = useState(false);
   const transitionArmValueRef = useRef(0.5);
   const [testActive, setTestActive] = useState<string | null>(null);
@@ -319,6 +324,54 @@ export default function App() {
     engine.resume();
     engine.decks[deck].setHotCueOrJump(pad);
   }
+  function handleClearHotCue(deck: 1 | 2, pad: number) {
+    engine.decks[deck].clearHotCue(pad);
+  }
+  function handleGoToStart(deck: 1 | 2) {
+    engine.decks[deck].goToStart();
+  }
+  function handleCrossfaderNudge(delta: number) {
+    const current = values['master.crossfader'] ?? 0.5;
+    handleCrossfaderChange(Math.max(0, Math.min(1, current + delta)));
+  }
+  function handleVolumeNudge(deck: 1 | 2, delta: number) {
+    const current = values[`${deck}.volume`] ?? 1;
+    handleVolumeChange(deck, Math.max(0, Math.min(1, current + delta)));
+  }
+  function handleTempoNudge(deck: 1 | 2, delta: number) {
+    const current = values[`${deck}.tempo`] ?? 0.5;
+    handleTempoChange(deck, Math.max(0, Math.min(1, current + delta)));
+  }
+  function handleEQNudge(deck: 1 | 2, band: 'low' | 'mid' | 'high', delta: number) {
+    const current = values[`${deck}.eq_${band}`] ?? 0.5;
+    handleEQChange(deck, band, Math.max(0, Math.min(1, current + delta)));
+  }
+  function handleFilterNudge(deck: 1 | 2, delta: number) {
+    const current = values[`master.filter_deck${deck}`] ?? 0.5;
+    handleFilterChange(deck, Math.max(0, Math.min(1, current + delta)));
+  }
+
+  useKeyboardMixer(
+    engine,
+    {
+      onTabSwitch: () => setFocusedDeck((d) => (d === 1 ? 2 : 1)),
+      getFocusedDeck: () => focusedDeckRef.current,
+      onPlay: handlePlay,
+      onCue: handleCue,
+      onGoToStart: handleGoToStart,
+      onHotCue: handleHotCue,
+      onClearHotCue: handleClearHotCue,
+      onSync: handleSync,
+      onCycleTempoRange: handleCycleTempoRange,
+      onToggleHeadphone: handleToggleCue,
+      onCrossfaderNudge: handleCrossfaderNudge,
+      onVolumeNudge: handleVolumeNudge,
+      onTempoNudge: handleTempoNudge,
+      onEQNudge: handleEQNudge,
+      onFilterNudge: handleFilterNudge,
+    },
+    true,
+  );
 
   // --- caricamento diretto (sostituisce subito quello che sta suonando sul deck) ---
   function loadItem(deck: 1 | 2, item: QueueItem) {
@@ -468,6 +521,7 @@ export default function App() {
               padMode={padMode[1]}
               onTogglePadMode={() => handleTogglePadMode(1)}
               onBeatLoop={(pad) => handleBeatLoop(1, pad)}
+              focused={focusedDeck === 1}
             />
           </Box>
 
@@ -523,8 +577,13 @@ export default function App() {
               padMode={padMode[2]}
               onTogglePadMode={() => handleTogglePadMode(2)}
               onBeatLoop={(pad) => handleBeatLoop(2, pad)}
+              focused={focusedDeck === 2}
             />
           </Box>
+        </Box>
+
+        <Box mb={2}>
+          <KeyboardLegend focusedDeck={focusedDeck} deckColor={focusedDeck === 1 ? palette.deck1 : palette.deck2} />
         </Box>
 
         <Box mb={2}>
