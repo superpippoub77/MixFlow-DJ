@@ -83,6 +83,23 @@ function CrossfaderTrack({ value, onChange, color }: { value: number; onChange: 
           pointerEvents: 'none',
         }}
       />
+      <Box
+        sx={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: '100%',
+          display: 'flex',
+          justifyContent: 'space-between',
+          pointerEvents: 'none',
+        }}
+      >
+        {['0', '25', '50', '75', '100'].map((tick) => (
+          <Typography key={tick} variant="caption" sx={{ fontSize: 7, opacity: 0.4, fontFamily: 'JetBrains Mono, monospace' }}>
+            {tick}
+          </Typography>
+        ))}
+      </Box>
     </Box>
   );
 }

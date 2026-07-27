@@ -127,6 +127,7 @@ export default function App() {
   const jogAngles = useJogAngles(ddj.onEvent);
   const [bpms, setBpms] = useState<Record<1 | 2, number | null>>({ 1: null, 2: null });
   const [beatPhases, setBeatPhases] = useState<Record<1 | 2, number | null>>({ 1: null, 2: null });
+  const [loadedTrackKey, setLoadedTrackKey] = useState<Record<1 | 2, string | null>>({ 1: null, 2: null });
   const { engine, snapshots } = useAudioEngine(ddj.onEvent, bpms, beatPhases);
   const { values, setManual } = useManualOverrides(ddj.onEvent, ddj.values);
   const [queues, setQueues] = useState<Record<1 | 2, QueueItem[]>>({ 1: [], 2: [] });
@@ -378,6 +379,7 @@ export default function App() {
   function loadItem(deck: 1 | 2, item: QueueItem) {
     engine.resume();
     const trim = trackSettings[trackKey(item)] ?? DEFAULT_TRIM;
+    setLoadedTrackKey((prev) => ({ ...prev, [deck]: trackKey(item) }));
     if (item.source === 'local') {
       engine.decks[deck].loadLocalFile(item.file, trim);
       setBpms((prev) => ({ ...prev, [deck]: null }));
@@ -638,6 +640,7 @@ export default function App() {
             onLoadYoutube={handleLoadYoutube}
             trackSettings={trackSettings}
             onUpdateTrackSettings={handleUpdateTrackSettings}
+            loadedTrackKey={loadedTrackKey}
           />
         </Box>
 

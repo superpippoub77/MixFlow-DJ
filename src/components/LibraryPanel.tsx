@@ -22,6 +22,7 @@ import { DEFAULT_TRIM, type TrimSettings } from '../audio/deck';
 import { localTrackKey, youtubeTrackKey } from '../utils/trackKey';
 import { formatTime, parseTimeInput } from '../utils/time';
 import { loadAllLocalTracks, removeLocalTrack, saveLocalTrack } from '../utils/localLibraryDB';
+import { palette } from '../theme';
 
 interface LocalTrack {
   id: string;
@@ -111,14 +112,32 @@ function TrackRow(props: {
   onDeck1: () => void;
   onDeck2: () => void;
   onRemove?: () => void;
+  loadedDecks: (1 | 2)[];
 }) {
-  const { title, subtitle, avatar, settings, expanded, onToggleExpanded, onChangeSettings, onDeck1, onDeck2, onRemove } = props;
+  const { title, subtitle, avatar, settings, expanded, onToggleExpanded, onChangeSettings, onDeck1, onDeck2, onRemove, loadedDecks } = props;
   const summary = trimSummary(settings);
+  const onD1 = loadedDecks.includes(1);
+  const onD2 = loadedDecks.includes(2);
+
+  const borderColor = onD1 && onD2 ? palette.master : onD1 ? palette.deck1 : onD2 ? palette.deck2 : 'transparent';
 
   return (
-    <Box>
-      <ListItemButton disableRipple sx={{ display: 'flex', alignItems: 'center', gap: 1.5, borderRadius: 1 }}>
+    <Box sx={{ borderLeft: `3px solid ${borderColor}`, transition: 'border-color 150ms' }}>
+      <ListItemButton
+        disableRipple
+        sx={{ display: 'flex', alignItems: 'center', gap: 1.5, borderRadius: 1, background: onD1 || onD2 ? 'rgba(255,255,255,0.03)' : 'transparent' }}
+      >
         {avatar && <Avatar variant="rounded" src={avatar} sx={{ width: 40, height: 40, flexShrink: 0 }} />}
+        {(onD1 || onD2) && (
+          <Box display="flex" gap={0.3} flexShrink={0}>
+            {onD1 && (
+              <Box sx={{ px: 0.5, borderRadius: 0.5, fontSize: 9, fontWeight: 700, background: palette.deck1, color: '#111' }}>D1</Box>
+            )}
+            {onD2 && (
+              <Box sx={{ px: 0.5, borderRadius: 0.5, fontSize: 9, fontWeight: 700, background: palette.deck2, color: '#111' }}>D2</Box>
+            )}
+          </Box>
+        )}
         <ListItemText
           primary={title}
           secondary={subtitle}
@@ -134,10 +153,10 @@ function TrackRow(props: {
         <Button size="small" onClick={onToggleExpanded} sx={{ minWidth: 32, fontSize: 14 }}>
           ✂️
         </Button>
-        <Button size="small" onClick={onDeck1} sx={{ minWidth: 40 }}>
+        <Button size="small" onClick={onDeck1} sx={{ minWidth: 40, color: onD1 ? palette.deck1 : undefined }}>
           → D1
         </Button>
-        <Button size="small" onClick={onDeck2} sx={{ minWidth: 40 }}>
+        <Button size="small" onClick={onDeck2} sx={{ minWidth: 40, color: onD2 ? palette.deck2 : undefined }}>
           → D2
         </Button>
         {onRemove && (
@@ -162,8 +181,16 @@ export function LibraryPanel(props: {
   onLoadYoutube: (deck: 1 | 2, videoId: string, title: string) => void;
   trackSettings: Record<string, TrimSettings>;
   onUpdateTrackSettings: (key: string, settings: TrimSettings) => void;
+  loadedTrackKey: Record<1 | 2, string | null>;
 }) {
-  const { onLoadLocal, onLoadYoutube, trackSettings, onUpdateTrackSettings } = props;
+  const { onLoadLocal, onLoadYoutube, trackSettings, onUpdateTrackSettings, loadedTrackKey } = props;
+
+  function loadedDecksFor(key: string): (1 | 2)[] {
+    const decks: (1 | 2)[] = [];
+    if (loadedTrackKey[1] === key) decks.push(1);
+    if (loadedTrackKey[2] === key) decks.push(2);
+    return decks;
+  }
 
   const [tab, setTab] = useState<'local' | 'youtube'>('local');
   const [localTracks, setLocalTracks] = useState<LocalTrack[]>([]);
@@ -345,6 +372,7 @@ export function LibraryPanel(props: {
                   onDeck1={() => onLoadLocal(1, track.file)}
                   onDeck2={() => onLoadLocal(2, track.file)}
                   onRemove={() => handleRemoveLocalTrack(track.id)}
+                  loadedDecks={loadedDecksFor(key)}
                 />
               );
             })}
@@ -426,6 +454,7 @@ export function LibraryPanel(props: {
                   onChangeSettings={(s) => onUpdateTrackSettings(key, s)}
                   onDeck1={() => onLoadYoutube(1, r.videoId, r.title)}
                   onDeck2={() => onLoadYoutube(2, r.videoId, r.title)}
+                  loadedDecks={loadedDecksFor(key)}
                 />
               );
             })}

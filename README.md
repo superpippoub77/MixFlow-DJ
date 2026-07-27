@@ -562,6 +562,26 @@ serve una libreria esterna per questo):
 
 
 
+## Tacche numerate su knob e slider
+
+- **Knob** (EQ, Filter): tacche + numeri intorno alla manopola (es. -12/-6/0/+6/+12
+  per l'EQ, ◄◄/◄/0/►/► per il Filter), come su una manopola fisica vera.
+- **Fader volume**: scala 0/25/50/75/100 sotto la barra.
+- **Fader tempo**: scala numerica a fianco (es. -8/-4/0/+4/+8, calcolata sul
+  range del pitch attualmente selezionato).
+- **Crossfader**: scala 0/25/50/75/100 sotto la traccia.
+
+## Evidenziazione dei brani per deck in Libreria
+
+Quando mandi un brano su D1 o D2 (o su entrambi), la sua riga in Libreria
+si colora: bordo e etichetta **D1**/**D2** nel colore di quel deck (o
+entrambe le etichette se lo stesso brano è su entrambi i deck). Anche i
+pulsanti "→ D1"/"→ D2" si colorano per il deck su cui il brano è
+attualmente caricato. L'evidenziazione segue il caricamento reale (anche
+quando un brano parte da solo dalla coda), non solo il click.
+
+
+
 ## Mappa MIDI (riassunto)
 
 | Controllo | Canale/Status | Note/CC |

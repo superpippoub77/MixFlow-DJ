@@ -236,9 +236,27 @@ function QueueList({
   );
 }
 
-function Knob({ label, value, color, onChange, id }: { label: string; value: number; color: string; onChange: (v: number) => void; id?: string }) {
+const KNOB_TICK_VALUES = [0, 0.25, 0.5, 0.75, 1];
+
+function Knob({
+  label,
+  value,
+  color,
+  onChange,
+  id,
+  tickLabels,
+}: {
+  label: string;
+  value: number;
+  color: string;
+  onChange: (v: number) => void;
+  id?: string;
+  tickLabels?: string[];
+}) {
   const angle = -135 + value * 270; // -135°..+135°
   const dragRef = useRef<{ startY: number; startValue: number } | null>(null);
+  const size = 40;
+  const center = size / 2;
 
   function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
     dragRef.current = { startY: e.clientY, startValue: value };
@@ -254,37 +272,84 @@ function Knob({ label, value, color, onChange, id }: { label: string; value: num
   }
 
   return (
-    <Box display="flex" flexDirection="column" alignItems="center" gap={0.4} width={52}>
-      <Box
-        id={id}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        sx={{
-          width: 36,
-          height: 36,
-          borderRadius: '50%',
-          border: '2px solid #2b2f37',
-          position: 'relative',
-          background: '#181b20',
-          cursor: 'ns-resize',
-          touchAction: 'none',
-          userSelect: 'none',
-        }}
-      >
+    <Box display="flex" flexDirection="column" alignItems="center" gap={0.4} width={60}>
+      <Box sx={{ position: 'relative', width: size + 26, height: size + 26 }}>
+        {/* Tacche + numeri intorno al knob */}
+        {KNOB_TICK_VALUES.map((tickValue, i) => {
+          const tickAngleDeg = -135 + tickValue * 270;
+          const rad = (tickAngleDeg * Math.PI) / 180;
+          const tickR = center + 7;
+          const labelR = center + 15;
+          const tx = center + 13 + tickR * Math.sin(rad);
+          const ty = center + 13 - tickR * Math.cos(rad);
+          const lx = center + 13 + labelR * Math.sin(rad);
+          const ly = center + 13 - labelR * Math.cos(rad);
+          return (
+            <Box key={tickValue}>
+              <Box
+                sx={{
+                  position: 'absolute',
+                  left: tx,
+                  top: ty,
+                  width: 2,
+                  height: 4,
+                  background: '#3a3f48',
+                  transform: `translate(-1px, -2px) rotate(${tickAngleDeg}deg)`,
+                }}
+              />
+              {tickLabels && (
+                <Typography
+                  variant="caption"
+                  sx={{
+                    position: 'absolute',
+                    left: lx,
+                    top: ly,
+                    transform: 'translate(-50%, -50%)',
+                    fontSize: 7,
+                    fontFamily: 'JetBrains Mono, monospace',
+                    opacity: 0.45,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {tickLabels[i]}
+                </Typography>
+              )}
+            </Box>
+          );
+        })}
         <Box
+          id={id}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
           sx={{
             position: 'absolute',
-            top: 3,
-            left: '50%',
-            width: 2,
-            height: 13,
-            background: color,
-            transformOrigin: '1px 15px',
-            transform: `rotate(${angle}deg)`,
-            pointerEvents: 'none',
+            left: 13,
+            top: 13,
+            width: size,
+            height: size,
+            borderRadius: '50%',
+            border: '2px solid #2b2f37',
+            background: '#181b20',
+            cursor: 'ns-resize',
+            touchAction: 'none',
+            userSelect: 'none',
           }}
-        />
+        >
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 3,
+              left: '50%',
+              width: 2,
+              height: 14,
+              background: color,
+              transformOrigin: '1px 17px',
+              transform: `rotate(${angle}deg)`,
+              pointerEvents: 'none',
+            }}
+          />
+        </Box>
       </Box>
       <Typography variant="caption" sx={{ opacity: 0.7, fontFamily: 'JetBrains Mono, monospace', fontSize: 9 }}>
         {label}
@@ -310,31 +375,48 @@ function VerticalTempoFader({
       <Typography variant="caption" sx={{ opacity: 0.6, fontFamily: 'JetBrains Mono, monospace', fontSize: 9 }}>
         -
       </Typography>
-      <Box
-        sx={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: 32,
-          minHeight: 120,
-        }}
-      >
-        <input
-          type="range"
-          min={0}
-          max={1}
-          step={0.01}
-          value={value}
-          onChange={(e) => onChange(parseFloat(e.target.value))}
-          style={{
-            width: 120,
-            accentColor: color,
-            cursor: 'pointer',
-            transform: 'rotate(90deg)',
-            transformOrigin: 'center',
+      <Box display="flex" alignItems="center" gap={0.5} sx={{ flex: 1, minHeight: 120 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            height: '100%',
+            py: 0.5,
           }}
-        />
+        >
+          {[tempoRangePercent, tempoRangePercent / 2, 0, -tempoRangePercent / 2, -tempoRangePercent].map((v, i) => (
+            <Typography key={i} variant="caption" sx={{ fontSize: 7, opacity: 0.4, fontFamily: 'JetBrains Mono, monospace' }}>
+              {v > 0 ? `+${v.toFixed(0)}` : v.toFixed(0)}
+            </Typography>
+          ))}
+        </Box>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 32,
+            height: '100%',
+          }}
+        >
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={value}
+            onChange={(e) => onChange(parseFloat(e.target.value))}
+            style={{
+              width: 120,
+              accentColor: color,
+              cursor: 'pointer',
+              transform: 'rotate(90deg)',
+              transformOrigin: 'center',
+            }}
+          />
+        </Box>
       </Box>
       <Typography variant="caption" sx={{ opacity: 0.6, fontFamily: 'JetBrains Mono, monospace', fontSize: 9 }}>
         +
@@ -366,6 +448,13 @@ function Fader({ label, value, color, onChange, id }: { label: string; value: nu
         onChange={(e) => onChange(parseFloat(e.target.value))}
         style={{ width: '100%', accentColor: color, cursor: 'pointer' }}
       />
+      <Box display="flex" justifyContent="space-between" width="100%" sx={{ px: 0.2 }}>
+        {['0', '25', '50', '75', '100'].map((tick) => (
+          <Typography key={tick} variant="caption" sx={{ fontSize: 7, opacity: 0.4, fontFamily: 'JetBrains Mono, monospace' }}>
+            {tick}
+          </Typography>
+        ))}
+      </Box>
     </Box>
   );
 }
@@ -769,10 +858,24 @@ export function DeckPanel(props: {
 
         {/* Colonna filtro + EQ, come sul mixer reale */}
         <Box display="flex" flexDirection="column" alignItems="center" gap={1.5} flexShrink={0}>
-          <Knob id={deck === 1 ? 'tid-deck1-filter' : undefined} label="FILTER" value={filterValue} color={color} onChange={onFilterChange} />
-          <Knob label="HIGH" value={v('eq_high')} color={color} onChange={(val) => onEQChange('high', val)} />
-          <Knob label="MID" value={v('eq_mid')} color={color} onChange={(val) => onEQChange('mid', val)} />
-          <Knob id={deck === 1 ? 'tid-deck1-eq-low' : undefined} label="LOW" value={v('eq_low')} color={color} onChange={(val) => onEQChange('low', val)} />
+          <Knob
+            id={deck === 1 ? 'tid-deck1-filter' : undefined}
+            label="FILTER"
+            value={filterValue}
+            color={color}
+            onChange={onFilterChange}
+            tickLabels={['◄◄', '◄', '0', '►', '►►']}
+          />
+          <Knob label="HIGH" value={v('eq_high')} color={color} onChange={(val) => onEQChange('high', val)} tickLabels={['-12', '-6', '0', '+6', '+12']} />
+          <Knob label="MID" value={v('eq_mid')} color={color} onChange={(val) => onEQChange('mid', val)} tickLabels={['-12', '-6', '0', '+6', '+12']} />
+          <Knob
+            id={deck === 1 ? 'tid-deck1-eq-low' : undefined}
+            label="LOW"
+            value={v('eq_low')}
+            color={color}
+            onChange={(val) => onEQChange('low', val)}
+            tickLabels={['-12', '-6', '0', '+6', '+12']}
+          />
         </Box>
 
         {/* Tempo verticale */}
