@@ -126,7 +126,8 @@ export default function App() {
   const ddj = useDDJ200();
   const jogAngles = useJogAngles(ddj.onEvent);
   const [bpms, setBpms] = useState<Record<1 | 2, number | null>>({ 1: null, 2: null });
-  const { engine, snapshots } = useAudioEngine(ddj.onEvent, bpms);
+  const [beatPhases, setBeatPhases] = useState<Record<1 | 2, number | null>>({ 1: null, 2: null });
+  const { engine, snapshots } = useAudioEngine(ddj.onEvent, bpms, beatPhases);
   const { values, setManual } = useManualOverrides(ddj.onEvent, ddj.values);
   const [queues, setQueues] = useState<Record<1 | 2, QueueItem[]>>({ 1: [], 2: [] });
   const [padMode, setPadMode] = useState<Record<1 | 2, 'hotcue' | 'beatloop'>>({ 1: 'hotcue', 2: 'hotcue' });
@@ -282,7 +283,7 @@ export default function App() {
     engine.decks[deck].seekTo(seconds);
   }
   function handleSync(deck: 1 | 2) {
-    engine.toggleSync(deck, bpms);
+    engine.toggleSync(deck, bpms, beatPhases);
   }
   function handleCycleTempoRange(deck: 1 | 2) {
     const current = engine.decks[deck].getTempoRange();
@@ -380,10 +381,15 @@ export default function App() {
     if (item.source === 'local') {
       engine.decks[deck].loadLocalFile(item.file, trim);
       setBpms((prev) => ({ ...prev, [deck]: null }));
-      detectBpm(item.file).then((bpm) => setBpms((prev) => ({ ...prev, [deck]: bpm })));
+      setBeatPhases((prev) => ({ ...prev, [deck]: null }));
+      detectBpm(item.file).then((result) => {
+        setBpms((prev) => ({ ...prev, [deck]: result?.bpm ?? null }));
+        setBeatPhases((prev) => ({ ...prev, [deck]: result?.phase ?? null }));
+      });
     } else {
       engine.decks[deck].loadYoutube(item.videoId, item.title, trim);
       setBpms((prev) => ({ ...prev, [deck]: null }));
+      setBeatPhases((prev) => ({ ...prev, [deck]: null }));
     }
   }
 
@@ -498,6 +504,8 @@ export default function App() {
               track={snapshots[1]}
               ytContainerId={engine.decks[1].getYtContainerId()}
               bpm={bpms[1]}
+              beatPhase={beatPhases[1]}
+              analyser={engine.decks[1].getAnalyser()}
               queue={queues[1].map(({ id, title, source }): QueueEntry => ({ id, title, source }))}
               syncAvailable={!!bpms[1] && !!bpms[2]}
               onPlay={() => handlePlay(1)}
@@ -554,6 +562,8 @@ export default function App() {
               track={snapshots[2]}
               ytContainerId={engine.decks[2].getYtContainerId()}
               bpm={bpms[2]}
+              beatPhase={beatPhases[2]}
+              analyser={engine.decks[2].getAnalyser()}
               queue={queues[2].map(({ id, title, source }): QueueEntry => ({ id, title, source }))}
               syncAvailable={!!bpms[1] && !!bpms[2]}
               onPlay={() => handlePlay(2)}

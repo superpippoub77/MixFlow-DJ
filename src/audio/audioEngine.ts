@@ -80,11 +80,13 @@ export class AudioEngine {
 
   /**
    * BEAT SYNC: interruttore persistente (non un'azione momentanea). Se lo
-   * attivi e conosciamo il BPM di entrambe le tracce, allinea la velocità di
-   * questo deck a quella dell'altro. Se lo disattivi, il LED si spegne (il
-   * pitch raggiunto resta quello finché non tocchi di nuovo il fader tempo).
+   * attivi e conosciamo il BPM di entrambe le tracce, allinea sia la
+   * velocità che la fase del beat-grid di questo deck a quella dell'altro
+   * (auto-align, non solo lo stesso BPM: anche i battiti combaciano nel
+   * tempo). Se lo disattivi, il LED si spegne (pitch e posizione raggiunti
+   * restano quelli finché non tocchi di nuovo il fader tempo).
    */
-  toggleSync(deck: 1 | 2, bpms: Record<1 | 2, number | null>) {
+  toggleSync(deck: 1 | 2, bpms: Record<1 | 2, number | null>, phases: Record<1 | 2, number | null>) {
     const other = deck === 1 ? 2 : 1;
     const d = this.decks[deck];
     if (d.isSyncActive()) {
@@ -96,8 +98,36 @@ export class AudioEngine {
     if (myBpm && otherBpm) {
       const otherRate = this.decks[other].getPlaybackRate();
       d.setPlaybackRateAbsolute((otherBpm * otherRate) / myBpm);
+      this.alignPhase(deck, other, bpms, phases);
     }
     d.setSyncActive(true);
+  }
+
+  /**
+   * Allinea la fase del beat-grid del deck "target" a quella del deck
+   * "reference": calcola dove cade il battito più vicino in entrambi (usando
+   * il BPM/fase grezzi di ciascun file, indipendenti dal playback rate
+   * attuale) e sposta la posizione del target del minimo necessario perché
+   * i due battiti combacino nel tempo.
+   */
+  private alignPhase(target: 1 | 2, reference: 1 | 2, bpms: Record<1 | 2, number | null>, phases: Record<1 | 2, number | null>) {
+    const bpmT = bpms[target];
+    const bpmR = bpms[reference];
+    const phaseT = phases[target];
+    const phaseR = phases[reference];
+    if (!bpmT || !bpmR || phaseT == null || phaseR == null) return;
+
+    const intervalT = 60 / bpmT;
+    const intervalR = 60 / bpmR;
+
+    const fracT = (((this.decks[target].getCurrentTime() - phaseT) % intervalT) + intervalT) % intervalT / intervalT;
+    const fracR = (((this.decks[reference].getCurrentTime() - phaseR) % intervalR) + intervalR) % intervalR / intervalR;
+
+    let deltaBeats = fracR - fracT;
+    if (deltaBeats > 0.5) deltaBeats -= 1;
+    if (deltaBeats < -0.5) deltaBeats += 1;
+
+    this.decks[target].seekBy(deltaBeats * intervalT);
   }
 
   private applyMix() {

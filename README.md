@@ -538,6 +538,30 @@ appena smetti di girare — invece di essere trattato come uno scratch.
 
 
 
+## Spettro in tempo reale + Auto-align
+
+Verificata `realtime-bpm-analyzer`: è una libreria seria (AudioWorklet
+nativo), ma **non risolve il problema di YouTube** — funziona comunque solo
+su nodi collegati al grafico Web Audio, e l'audio di YouTube non ci entra
+mai (iframe isolato, nessun accesso ai campioni grezzi). Per i file locali
+però ha ispirato due aggiunte reali, fatte con l'AnalyserNode nativo (non
+serve una libreria esterna per questo):
+
+- **Spettro** (`src/components/SpectrumDisplay.tsx`): barre di frequenza in
+  tempo reale per ogni deck, con un pallino che lampeggia sul battito
+  stimato (da BPM+fase calcolati offline, non un vero beat-tracking live).
+  Solo file locali.
+- **Auto-align vero**: prima, BEAT SYNC allineava solo la *velocità* (stesso
+  BPM), non la *fase* (i battiti potevano comunque cadere sfalsati nel
+  tempo). Ora `bpmDetect.ts` calcola anche la fase del beat-grid (dove cade
+  il primo battito), e `AudioEngine.toggleSync` la usa per spostare
+  leggermente la posizione del deck che stai sincronizzando finché i suoi
+  battiti non combaciano con quelli dell'altro deck (quello "attualmente in
+  play" preso come riferimento) — non solo stesso tempo, ma anche in fase.
+  Funziona nei due versi: premi Sync su D1 mentre D2 suona, o viceversa.
+
+
+
 ## Mappa MIDI (riassunto)
 
 | Controllo | Canale/Status | Note/CC |

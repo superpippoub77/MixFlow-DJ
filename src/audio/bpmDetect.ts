@@ -1,17 +1,28 @@
 /**
- * Stima approssimativa del BPM di un file audio locale.
+ * Stima approssimativa del BPM e della "fase" del battito (a che punto,
+ * rispetto all'inizio del file, cade il primo battito del beat-grid) di un
+ * file audio locale.
  *
  * Funziona solo per i file locali: per le tracce YouTube non abbiamo accesso
  * ai dati audio grezzi (stesso limite dell'EQ, vedi deck.ts).
  *
  * Algoritmo: isola le basse frequenze (tipicamente la cassa), individua i
  * picchi di energia con una soglia adattiva, calcola gli intervalli tra
- * picchi consecutivi e prende l'intervallo più ricorrente come battito.
+ * picchi consecutivi e prende l'intervallo più ricorrente come battito. La
+ * fase serve per l'auto-align: sapere DOVE cade il battito, non solo quanto
+ * dura, permette di allineare i beat-grid di due tracce invece di limitarsi
+ * a far combaciare la sola velocità.
  * È una stima euristica pensata per musica a beat regolare (house, techno,
  * pop...), non un vero beat-tracking: su generi con ritmica irregolare o
  * poco percussiva può sbagliare o non trovare nulla.
  */
-export async function detectBpm(file: File): Promise<number | null> {
+export interface BpmResult {
+  bpm: number;
+  /** Secondi dall'inizio del file al primo battito del beat-grid rilevato (0..60/bpm) */
+  phase: number;
+}
+
+export async function detectBpm(file: File): Promise<BpmResult | null> {
   try {
     const arrayBuffer = await file.arrayBuffer();
     const decodeCtx = new AudioContext();
@@ -79,7 +90,13 @@ export async function detectBpm(file: File): Promise<number | null> {
       }
     }
 
-    return bestBpm;
+    if (bestBpm == null) return null;
+
+    const beatInterval = 60 / bestBpm;
+    const firstPeakTime = peaks[0] / sampleRate;
+    const phase = firstPeakTime % beatInterval;
+
+    return { bpm: bestBpm, phase };
   } catch {
     return null;
   }

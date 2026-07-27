@@ -54,6 +54,7 @@ export class Deck {
   private trimFadeGain: GainNode;
   private volumeGain: GainNode;
   private cueTap: GainNode;
+  private analyser: AnalyserNode;
 
   // --- vero motore di scratch (bidirezionale, con audio reale anche all'indietro) ---
   private buffer: AudioBuffer | null = null; // copia decodificata del brano, usata solo per lo scratch
@@ -116,6 +117,9 @@ export class Deck {
     this.trimFadeGain = ctx.createGain();
     this.cueTap = ctx.createGain();
     this.cueTap.gain.value = 0; // 0 = non in cuffia, 1 = in ascolto (PFL)
+    this.analyser = ctx.createAnalyser();
+    this.analyser.fftSize = 256;
+    this.analyser.smoothingTimeConstant = 0.75;
 
     this.lowFilter.connect(this.midFilter);
     this.midFilter.connect(this.highFilter);
@@ -124,10 +128,18 @@ export class Deck {
     this.trimFadeGain.connect(this.volumeGain);
     this.volumeGain.connect(destination);
 
+    // Tap per lo spettro in tempo reale: legge il segnale dopo EQ/filtro, non serve un'uscita a valle
+    this.cfxFilter.connect(this.analyser);
+
     // Tap "pre-fader" per il preview in cuffia: prende il segnale dopo EQ/filtro
     // ma prima del volume/crossfader, come il PFL di un mixer vero.
     this.cfxFilter.connect(this.cueTap);
     this.cueTap.connect(cueBus);
+  }
+
+  /** AnalyserNode per lo spettro in tempo reale: solo file locali (YouTube non passa da questo grafico) */
+  getAnalyser(): AnalyserNode | null {
+    return this.sourceType === 'local' ? this.analyser : null;
   }
 
   getYtContainerId() {

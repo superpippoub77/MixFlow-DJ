@@ -6,6 +6,7 @@ import HeadphonesIcon from '@mui/icons-material/Headphones';
 import type { DeckSnapshot } from '../audio/deck';
 import { TEMPO_RANGE_LABELS } from '../audio/deck';
 import { DotDisplay } from './DotDisplay';
+import { SpectrumDisplay } from './SpectrumDisplay';
 import { formatTime, parseTimeInput } from '../utils/time';
 
 export interface QueueEntry {
@@ -510,6 +511,8 @@ export function DeckPanel(props: {
   track: DeckSnapshot;
   ytContainerId: string;
   bpm: number | null;
+  beatPhase: number | null;
+  analyser: AnalyserNode | null;
   queue: QueueEntry[];
   syncAvailable: boolean;
   onPlay: () => void;
@@ -544,6 +547,8 @@ export function DeckPanel(props: {
     track,
     ytContainerId,
     bpm,
+    beatPhase,
+    analyser,
     queue,
     syncAvailable,
     onPlay,
@@ -631,6 +636,14 @@ export function DeckPanel(props: {
       </Box>
 
       <NowPlaying track={track} color={color} ytContainerId={ytContainerId} onSeek={onSeek} bpm={bpm} />
+      <SpectrumDisplay
+        analyser={analyser}
+        color={color}
+        bpm={bpm}
+        phase={beatPhase}
+        currentTime={track.currentTime}
+        playbackRate={track.playbackRate}
+      />
       <JumpToTime color={color} onJump={onJumpToTime} />
       <QueueList
         queue={queue}

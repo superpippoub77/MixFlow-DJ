@@ -4,13 +4,19 @@ import { TEMPO_RANGES } from './deck';
 import type { DeckSnapshot } from './deck';
 import type { DDJ200Event } from '../midi/decodeDDJ200';
 
-export function useAudioEngine(onEvent: (cb: (e: DDJ200Event) => void) => () => void, bpms: Record<1 | 2, number | null>) {
+export function useAudioEngine(
+  onEvent: (cb: (e: DDJ200Event) => void) => () => void,
+  bpms: Record<1 | 2, number | null>,
+  beatPhases: Record<1 | 2, number | null>,
+) {
   const engineRef = useRef<AudioEngine | null>(null);
   if (!engineRef.current) engineRef.current = new AudioEngine();
   const engine = engineRef.current;
 
   const bpmsRef = useRef(bpms);
   bpmsRef.current = bpms;
+  const beatPhasesRef = useRef(beatPhases);
+  beatPhasesRef.current = beatPhases;
 
   // Stato "grezzo" di alcuni pulsanti fisici, tenuto qui (non in React state)
   // per rilevare correttamente il "fronte di salita" (appena premuto) e
@@ -95,7 +101,7 @@ export function useAudioEngine(onEvent: (cb: (e: DDJ200Event) => void) => () => 
           const next = TEMPO_RANGES[(idx + 1) % TEMPO_RANGES.length];
           engine.decks[deck].setTempoRange(next);
         } else {
-          engine.toggleSync(deck, bpmsRef.current);
+          engine.toggleSync(deck, bpmsRef.current, beatPhasesRef.current);
         }
       }
       if (event.kind === 'hotcue' && event.pressed) {

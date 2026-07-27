@@ -193,7 +193,7 @@ export function LibraryPanel(props: {
       const restored: LocalTrack[] = files.map(({ id, file }) => ({ id, file, bpm: 'loading' }));
       setLocalTracks(restored);
       for (const t of restored) {
-        detectBpm(t.file).then((bpm) => setLocalTracks((prev) => prev.map((x) => (x.id === t.id ? { ...x, bpm } : x))));
+        detectBpm(t.file).then((result) => setLocalTracks((prev) => prev.map((x) => (x.id === t.id ? { ...x, bpm: result?.bpm ?? null } : x))));
       }
     });
   }, []);
@@ -227,8 +227,8 @@ export function LibraryPanel(props: {
       saveLocalTrack(track.id, track.file).catch(() => {
         // salvataggio persistente fallito (es. quota IndexedDB piena): il brano resta comunque usabile in questa sessione
       });
-      detectBpm(track.file).then((bpm) => {
-        setLocalTracks((prev) => prev.map((t) => (t.id === track.id ? { ...t, bpm } : t)));
+      detectBpm(track.file).then((result) => {
+        setLocalTracks((prev) => prev.map((t) => (t.id === track.id ? { ...t, bpm: result?.bpm ?? null } : t)));
       });
     }
   }
